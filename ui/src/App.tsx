@@ -80,6 +80,12 @@ type LaunchEvent = {
   message?: string | null;
 };
 
+type ManifestVersion = {
+  id: string;
+  type: string;
+  releaseTime?: string;
+};
+
 type ContentTab = "mods" | "resourcepacks" | "shaderpacks";
 
 type ModalType =
@@ -92,6 +98,14 @@ type ModalType =
   | "device-code";
 
 type DrawerType = "accounts" | "settings" | null;
+
+type ConfirmState = {
+  title: string;
+  message: string;
+  confirmLabel?: string;
+  tone?: "danger" | "default";
+  onConfirm: () => void | Promise<void>;
+};
 
 const tabLabel: Record<ContentTab, string> = {
   mods: "Mods",
@@ -113,6 +127,7 @@ function App() {
   const [toast, setToast] = useState<{ title: string; detail?: string } | null>(null);
   const [launchStatus, setLaunchStatus] = useState<LaunchEvent | null>(null);
   const [isWorking, setIsWorking] = useState(false);
+  const [confirmState, setConfirmState] = useState<ConfirmState | null>(null);
 
   const [createForm, setCreateForm] = useState({
     id: "",
@@ -123,17 +138,27 @@ function App() {
     memory: "",
     args: ""
   });
+  const [createErrors, setCreateErrors] = useState<Record<string, string>>({});
+  const [showSnapshots, setShowSnapshots] = useState(false);
+  const [mcVersions, setMcVersions] = useState<ManifestVersion[]>([]);
+  const [mcVersionLoading, setMcVersionLoading] = useState(false);
+  const [mcVersionError, setMcVersionError] = useState<string | null>(null);
+  const [loaderVersions, setLoaderVersions] = useState<string[]>([]);
+  const [loaderLoading, setLoaderLoading] = useState(false);
+  const [loaderError, setLoaderError] = useState<string | null>(null);
 
   const [cloneForm, setCloneForm] = useState({
     src: "",
     dst: ""
   });
+  const [cloneErrors, setCloneErrors] = useState<Record<string, string>>({});
 
   const [diffForm, setDiffForm] = useState({
     a: "",
     b: ""
   });
   const [diffResult, setDiffResult] = useState<DiffResult | null>(null);
+  const [diffErrors, setDiffErrors] = useState<Record<string, string>>({});
 
   const [contentForm, setContentForm] = useState({
     input: "",
@@ -142,6 +167,7 @@ function App() {
     version: ""
   });
   const [contentKind, setContentKind] = useState<ContentTab>("mods");
+  const [contentErrors, setContentErrors] = useState<Record<string, string>>({});
 
   const [deviceCode, setDeviceCode] = useState<DeviceCode | null>(null);
   const [devicePending, setDevicePending] = useState(false);
@@ -156,6 +182,14 @@ function App() {
     return profiles.filter((id) => id.toLowerCase().includes(query));
   }, [profiles, profileFilter]);
 
+  const visibleVersions = useMemo(() => {
+    return mcVersions.filter((entry) => showSnapshots || entry.type === "release");
+  }, [mcVersions, showSnapshots]);
+
+  const latestRelease = useMemo(() => {
+    return mcVersions.find((entry) => entry.type === "release")?.id;
+  }, [mcVersions]);
+
   const activeAccount = useMemo(() => {
     if (!accounts) return null;
     const id = selectedAccountId ?? accounts.active ?? null;
@@ -168,6 +202,8 @@ function App() {
     if (activeTab === "resourcepacks") return profile.resourcepacks;
     return profile.shaderpacks;
   }, [profile, activeTab]);
+
+  const inputClass = (error?: string) => clsx("input", error && "input-error");
 
   useEffect(() => {
     void loadInitial();
@@ -196,8 +232,120 @@ function App() {
     };
   }, []);
 
+  useEffect(() => {
+    const handleKey = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "n") {
+        event.preventDefault();
+        openCreateModal();
+        return;
+      }
+      if (event.key === "Escape") {
+        if (confirmState) {
+          setConfirmState(null);
+          return;
+        }
+        if (activeModal) {
+          setActiveModal(null);
+          return;
+        }
+        if (activeDrawer) {
+          setActiveDrawer(null);
+          return;
+        }
+      }
+      if (event.key === "Enter") {
+        if (confirmState) {
+          event.preventDefault();
+          void confirmState.onConfirm();
+          return;
+        }
+        if (activeModal === "create") {
+          event.preventDefault();
+          void handleCreateProfile();
+        } else if (activeModal === "clone") {
+          event.preventDefault();
+          void handleCloneProfile();
+        } else if (activeModal === "diff") {
+          event.preventDefault();
+          void handleDiffProfiles();
+        } else if (activeModal === "add-content") {
+          event.preventDefault();
+          void handleAddContent();
+        } else if (activeModal === "device-code" && deviceCode && !devicePending) {
+          event.preventDefault();
+          void handleFinishDeviceCode();
+        }
+      }
+    };
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [activeModal, activeDrawer, confirmState, deviceCode, devicePending]);
+
   const loadInitial = async () => {
     await Promise.all([loadProfiles(), loadAccounts(), loadConfig()]);
+  };
+
+  const fetchMinecraftVersions = async () => {
+    setMcVersionLoading(true);
+    setMcVersionError(null);
+    try {
+      const resp = await fetch("https://piston-meta.mojang.com/mc/game/version_manifest_v2.json");
+      if (!resp.ok) {
+        throw new Error(`HTTP ${resp.status}`);
+      }
+      const data = await resp.json();
+      const list = (data.versions ?? []).map((entry: any) => ({
+        id: String(entry.id),
+        type: String(entry.type),
+        releaseTime: entry.releaseTime
+      })) as ManifestVersion[];
+      setMcVersions(list);
+      if (!createForm.mcVersion && data.latest?.release) {
+        setCreateForm((prev) => ({ ...prev, mcVersion: data.latest.release }));
+      }
+    } catch (err) {
+      setMcVersionError("Failed to load versions.");
+      console.error(err);
+    } finally {
+      setMcVersionLoading(false);
+    }
+  };
+
+  const fetchLoaderVersions = async () => {
+    setLoaderLoading(true);
+    setLoaderError(null);
+    try {
+      const resp = await fetch("https://meta.fabricmc.net/v2/versions/loader");
+      if (!resp.ok) {
+        throw new Error(`HTTP ${resp.status}`);
+      }
+      const data = await resp.json();
+      const versions = (data ?? [])
+        .map((entry: any) => entry?.loader?.version)
+        .filter((value: string | undefined) => !!value) as string[];
+      setLoaderVersions(Array.from(new Set(versions)));
+    } catch (err) {
+      setLoaderError("Failed to load loader versions.");
+      console.error(err);
+    } finally {
+      setLoaderLoading(false);
+    }
+  };
+
+  const ensureVersionData = () => {
+    if (mcVersions.length === 0 && !mcVersionLoading) {
+      void fetchMinecraftVersions();
+    }
+    if (createForm.loaderType === "fabric" && loaderVersions.length === 0 && !loaderLoading) {
+      void fetchLoaderVersions();
+    }
+  };
+
+  const refreshVersionData = async () => {
+    await fetchMinecraftVersions();
+    if (createForm.loaderType === "fabric") {
+      await fetchLoaderVersions();
+    }
   };
 
   const loadProfiles = async () => {
@@ -247,6 +395,10 @@ function App() {
     setTimeout(() => setToast(null), 3800);
   };
 
+  const openConfirm = (state: ConfirmState) => {
+    setConfirmState(state);
+  };
+
   const runAction = async (action: () => Promise<void>) => {
     setIsWorking(true);
     try {
@@ -268,23 +420,28 @@ function App() {
       memory: "",
       args: ""
     });
+    setCreateErrors({});
     setActiveModal("create");
+    ensureVersionData();
   };
 
   const openCloneModal = () => {
     setCloneForm({ src: selectedProfileId ?? "", dst: "" });
+    setCloneErrors({});
     setActiveModal("clone");
   };
 
   const openDiffModal = () => {
     setDiffForm({ a: selectedProfileId ?? "", b: "" });
     setDiffResult(null);
+    setDiffErrors({});
     setActiveModal("diff");
   };
 
   const openAddContentModal = (kind: ContentTab) => {
     setContentForm({ input: "", url: "", name: "", version: "" });
     setContentKind(kind);
+    setContentErrors({});
     setActiveModal("add-content");
   };
 
@@ -294,9 +451,36 @@ function App() {
     setActiveModal("device-code");
   };
 
+  useEffect(() => {
+    if (activeModal === "create") {
+      ensureVersionData();
+    }
+  }, [activeModal]);
+
+  useEffect(() => {
+    if (activeModal === "create" && createForm.loaderType === "fabric") {
+      if (loaderVersions.length === 0 && !loaderLoading) {
+        void fetchLoaderVersions();
+      }
+    }
+  }, [activeModal, createForm.loaderType, loaderVersions.length, loaderLoading]);
+
   const handleCreateProfile = async () => {
-    if (!createForm.id || !createForm.mcVersion) {
-      notify("Missing fields", "Profile id and Minecraft version are required.");
+    const errors: Record<string, string> = {};
+    if (!createForm.id.trim()) {
+      errors.id = "Profile id is required.";
+    }
+    if (!createForm.mcVersion.trim()) {
+      errors.mcVersion = "Minecraft version is required.";
+    }
+    if (createForm.loaderType && !createForm.loaderVersion.trim()) {
+      errors.loaderVersion = "Loader version is required.";
+    }
+    if (!createForm.loaderType && createForm.loaderVersion.trim()) {
+      errors.loaderType = "Select a loader type.";
+    }
+    setCreateErrors(errors);
+    if (Object.keys(errors).length > 0) {
       return;
     }
     await runAction(async () => {
@@ -317,8 +501,18 @@ function App() {
   };
 
   const handleCloneProfile = async () => {
-    if (!cloneForm.src || !cloneForm.dst) {
-      notify("Missing fields", "Source and destination ids are required.");
+    const errors: Record<string, string> = {};
+    if (!cloneForm.src.trim()) {
+      errors.src = "Source profile is required.";
+    }
+    if (!cloneForm.dst.trim()) {
+      errors.dst = "Destination id is required.";
+    }
+    if (cloneForm.src.trim() && cloneForm.dst.trim() && cloneForm.src.trim() === cloneForm.dst.trim()) {
+      errors.dst = "Destination must be different.";
+    }
+    setCloneErrors(errors);
+    if (Object.keys(errors).length > 0) {
       return;
     }
     await runAction(async () => {
@@ -330,8 +524,18 @@ function App() {
   };
 
   const handleDiffProfiles = async () => {
-    if (!diffForm.a || !diffForm.b) {
-      notify("Missing fields", "Pick two profiles to compare.");
+    const errors: Record<string, string> = {};
+    if (!diffForm.a.trim()) {
+      errors.a = "Pick a profile.";
+    }
+    if (!diffForm.b.trim()) {
+      errors.b = "Pick a profile.";
+    }
+    if (diffForm.a && diffForm.b && diffForm.a === diffForm.b) {
+      errors.b = "Pick a different profile.";
+    }
+    setDiffErrors(errors);
+    if (Object.keys(errors).length > 0) {
       return;
     }
     await runAction(async () => {
@@ -346,8 +550,12 @@ function App() {
   const handleAddContent = async () => {
     if (!selectedProfileId) return;
     const inputValue = contentForm.input || contentForm.url;
+    const errors: Record<string, string> = {};
     if (!inputValue) {
-      notify("Missing input", "Pick a file or paste a URL.");
+      errors.input = "Pick a file or paste a URL.";
+    }
+    setContentErrors(errors);
+    if (Object.keys(errors).length > 0) {
       return;
     }
     await runAction(async () => {
@@ -371,16 +579,25 @@ function App() {
 
   const handleRemoveContent = async (item: ContentRef) => {
     if (!selectedProfileId) return;
-    await runAction(async () => {
-      const payload = { profile_id: selectedProfileId, target: item.hash };
-      if (activeTab === "mods") {
-        await invoke("remove_mod_cmd", payload);
-      } else if (activeTab === "resourcepacks") {
-        await invoke("remove_resourcepack_cmd", payload);
-      } else {
-        await invoke("remove_shaderpack_cmd", payload);
+    openConfirm({
+      title: `Remove ${item.name}?`,
+      message: "This will remove it from the profile but keep the stored file.",
+      confirmLabel: "Remove",
+      tone: "danger",
+      onConfirm: async () => {
+        setConfirmState(null);
+        await runAction(async () => {
+          const payload = { profile_id: selectedProfileId, target: item.hash };
+          if (activeTab === "mods") {
+            await invoke("remove_mod_cmd", payload);
+          } else if (activeTab === "resourcepacks") {
+            await invoke("remove_resourcepack_cmd", payload);
+          } else {
+            await invoke("remove_shaderpack_cmd", payload);
+          }
+          await loadProfile(selectedProfileId);
+        });
       }
-      await loadProfile(selectedProfileId);
     });
   };
 
@@ -481,10 +698,23 @@ function App() {
     });
   };
 
+  const formatSource = (source?: string | null) => {
+    if (!source) return null;
+    try {
+      const url = new URL(source);
+      return url.host.replace(/^www\./, "");
+    } catch {
+      return source;
+    }
+  };
+
   return (
-    <div className="min-h-screen p-6">
-      <div className="glass rounded-[32px] p-6 shadow-glow fade-in">
-        <header className="flex flex-wrap items-center justify-between gap-4 border-b border-white/10 pb-4">
+    <div className="min-h-screen p-5">
+      <div className="glass rounded-[32px] p-5 shadow-glow fade-in min-h-[calc(100vh-40px)] flex flex-col">
+        <header
+          data-tauri-drag-region
+          className="flex flex-wrap items-center justify-between gap-4 border-b border-white/10 pb-4"
+        >
           <div className="flex items-center gap-3">
             <div className="h-10 w-10 rounded-2xl nebula flex items-center justify-center text-lg font-semibold text-white/90 shadow-soft">
               S
@@ -498,12 +728,14 @@ function App() {
           </div>
           <div className="flex items-center gap-2">
             <button
+              data-tauri-drag-region="false"
               className="px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-sm text-mist hover:bg-white/10"
               onClick={() => setActiveDrawer("accounts")}
             >
               Accounts
             </button>
             <button
+              data-tauri-drag-region="false"
               className="px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-sm text-mist hover:bg-white/10"
               onClick={() => setActiveDrawer("settings")}
             >
@@ -512,11 +744,12 @@ function App() {
           </div>
         </header>
 
-        <div className="grid grid-cols-[260px_1fr] gap-6 pt-6">
-          <aside className="panel rounded-2xl p-4 flex flex-col gap-4">
+        <div className="grid grid-cols-[260px_1fr] gap-6 pt-6 flex-1 min-h-0">
+          <aside className="panel rounded-2xl p-4 flex flex-col gap-4 min-h-0">
             <div className="flex items-center justify-between">
               <span className="text-xs uppercase tracking-widest text-haze font-mono">Profiles</span>
               <button
+                data-tauri-drag-region="false"
                 className="text-xs text-accent hover:text-white"
                 onClick={openCreateModal}
               >
@@ -528,6 +761,7 @@ function App() {
               onChange={(event) => setProfileFilter(event.target.value)}
               placeholder="Search profiles"
               className="w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2 text-sm outline-none focus:border-accent/50"
+              data-tauri-drag-region="false"
             />
             <div className="flex-1 overflow-auto space-y-2 pr-1">
               {filteredProfiles.length === 0 ? (
@@ -554,7 +788,7 @@ function App() {
             </div>
           </aside>
 
-          <main className="flex flex-col gap-4">
+          <main className="flex flex-col gap-4 flex-1 min-h-0">
             {!profile ? (
               <section className="panel rounded-2xl p-8 text-center">
                 <h2 className="text-lg font-semibold">No profile selected</h2>
@@ -570,7 +804,7 @@ function App() {
               </section>
             ) : (
               <>
-                <section className="panel rounded-2xl p-6">
+                <section className="panel rounded-2xl p-6 flex flex-col min-h-0">
                   <div className="flex flex-wrap items-start justify-between gap-4">
                     <div>
                       <p className="text-xs uppercase tracking-[0.28em] text-haze font-mono">Active profile</p>
@@ -589,10 +823,16 @@ function App() {
                           <Chip label="Custom Java" />
                         ) : null}
                       </div>
+                      <div className="mt-4 grid grid-cols-3 gap-3">
+                        <Stat label="Mods" value={profile.mods.length} />
+                        <Stat label="Resourcepacks" value={profile.resourcepacks.length} />
+                        <Stat label="Shaderpacks" value={profile.shaderpacks.length} />
+                      </div>
                     </div>
                     <div className="flex flex-col items-end gap-3">
                       <div className="flex items-center gap-2">
                         <select
+                          data-tauri-drag-region="false"
                           className="rounded-full bg-white/5 border border-white/10 px-3 py-2 text-xs text-mist outline-none"
                           value={activeAccount?.uuid ?? ""}
                           onChange={(event) => setSelectedAccountId(event.target.value)}
@@ -608,6 +848,7 @@ function App() {
                           )}
                         </select>
                         <button
+                          data-tauri-drag-region="false"
                           className="px-4 py-2 rounded-full bg-accent text-ink text-sm font-medium disabled:opacity-50"
                           onClick={handleLaunch}
                           disabled={!activeAccount || isWorking}
@@ -617,24 +858,28 @@ function App() {
                       </div>
                       <div className="flex items-center gap-2">
                         <button
+                          data-tauri-drag-region="false"
                           className="px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-xs text-mist"
                           onClick={handlePrepare}
                         >
                           Prepare
                         </button>
                         <button
+                          data-tauri-drag-region="false"
                           className="px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-xs text-mist"
                           onClick={openCloneModal}
                         >
                           Clone
                         </button>
                         <button
+                          data-tauri-drag-region="false"
                           className="px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-xs text-mist"
                           onClick={openDiffModal}
                         >
                           Diff
                         </button>
                         <button
+                          data-tauri-drag-region="false"
                           className="px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-xs text-mist"
                           onClick={() => setActiveModal("json")}
                         >
@@ -645,12 +890,14 @@ function App() {
                   </div>
                   <div className="mt-5 flex flex-wrap gap-2 text-xs text-haze">
                     <button
+                      data-tauri-drag-region="false"
                       className="px-3 py-1 rounded-full border border-white/10 hover:border-white/20"
                       onClick={handleOpenInstance}
                     >
                       Open instance folder
                     </button>
                     <button
+                      data-tauri-drag-region="false"
                       className="px-3 py-1 rounded-full border border-white/10 hover:border-white/20"
                       onClick={handleCopyCommand}
                     >
@@ -674,7 +921,7 @@ function App() {
                           className={clsx(
                             "px-3 py-1.5 rounded-full text-xs",
                             activeTab === tab
-                              ? "bg-white/10 text-mist border border-white/15"
+                              ? "bg-white/10 text-mist border border-white/20"
                               : "text-haze border border-transparent hover:border-white/10"
                           )}
                           onClick={() => setActiveTab(tab)}
@@ -690,18 +937,33 @@ function App() {
                       Add {tabLabel[activeTab]}
                     </button>
                   </div>
-                  <div className="mt-4 space-y-2 max-h-[320px] overflow-auto pr-1">
+                  <div className="mt-4 space-y-2 flex-1 overflow-auto pr-1">
                     {contentItems.length === 0 ? (
-                      <div className="text-sm text-haze/70">No {tabLabel[activeTab].toLowerCase()} yet.</div>
+                      <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-4 text-sm text-haze flex items-center justify-between">
+                        <span>No {tabLabel[activeTab].toLowerCase()} yet.</span>
+                        <button
+                          className="btn-secondary text-xs"
+                          onClick={() => openAddContentModal(activeTab)}
+                        >
+                          Add {tabLabel[activeTab]}
+                        </button>
+                      </div>
                     ) : (
                       contentItems.map((item) => (
                         <div
                           key={item.hash}
-                          className="flex items-center justify-between gap-3 rounded-xl border border-white/5 bg-white/3 px-3 py-2"
+                          className="flex items-start justify-between gap-3 rounded-xl border border-white/5 bg-white/5 px-3 py-3"
                         >
                           <div>
                             <div className="text-sm text-mist font-medium">{item.name}</div>
-                            <div className="text-[11px] text-haze font-mono">{item.hash.slice(0, 14)}...</div>
+                            <div className="mt-1 flex flex-wrap gap-2 text-[11px] text-haze">
+                              {item.version ? <MetaChip label={`v${item.version}`} /> : null}
+                              {item.source ? <MetaChip label={formatSource(item.source) ?? item.source} /> : null}
+                              {item.file_name ? <MetaChip label={item.file_name} /> : null}
+                            </div>
+                            <div className="mt-1 text-[11px] text-haze font-mono">
+                              {item.hash.slice(0, 14)}…
+                            </div>
                           </div>
                           <button
                             className="text-xs text-haze hover:text-white"
@@ -763,10 +1025,19 @@ function App() {
                       </button>
                       <button
                         className="text-xs text-haze"
-                        onClick={async () => {
-                          await runAction(async () => {
-                            await invoke("remove_account_cmd", { id: account.uuid });
-                            await loadAccounts();
+                        onClick={() => {
+                          openConfirm({
+                            title: `Remove ${account.username}?`,
+                            message: "This account will be disconnected from Shard.",
+                            confirmLabel: "Remove",
+                            tone: "danger",
+                            onConfirm: async () => {
+                              setConfirmState(null);
+                              await runAction(async () => {
+                                await invoke("remove_account_cmd", { id: account.uuid });
+                                await loadAccounts();
+                              });
+                            }
                           });
                         }}
                       >
@@ -822,46 +1093,104 @@ function App() {
 
       <Modal open={activeModal === "create"} onClose={() => setActiveModal(null)} title="Create profile">
         <div className="space-y-4">
-          <Field label="Profile id">
+          <Field label="Profile id" error={createErrors.id}>
             <input
               value={createForm.id}
               onChange={(event) => setCreateForm({ ...createForm, id: event.target.value })}
-              className="input"
+              className={inputClass(createErrors.id)}
               placeholder="my-profile"
             />
           </Field>
-          <Field label="Minecraft version">
-            <input
-              value={createForm.mcVersion}
-              onChange={(event) => setCreateForm({ ...createForm, mcVersion: event.target.value })}
-              className="input"
-              placeholder="1.20.4"
-            />
+          <Field label="Minecraft version" error={createErrors.mcVersion}>
+            <div className="flex items-center gap-2">
+              <select
+                value={createForm.mcVersion}
+                onChange={(event) => setCreateForm({ ...createForm, mcVersion: event.target.value })}
+                className={inputClass(createErrors.mcVersion)}
+              >
+                <option value="">
+                  {mcVersionLoading ? "Loading versions…" : "Select version"}
+                </option>
+                {visibleVersions.map((entry) => (
+                  <option key={entry.id} value={entry.id}>
+                    {entry.id} {entry.type === "snapshot" ? "(snapshot)" : ""}
+                  </option>
+                ))}
+              </select>
+              <button
+                className="btn-secondary whitespace-nowrap"
+                onClick={refreshVersionData}
+                disabled={mcVersionLoading}
+              >
+                {mcVersionLoading ? "Loading" : "Refresh"}
+              </button>
+            </div>
+            {mcVersionError ? <div className="mt-1 text-[11px] text-rose-300">{mcVersionError}</div> : null}
+            <div className="mt-2 flex items-center justify-between text-[11px] text-haze">
+              <button
+                className="text-haze hover:text-white"
+                onClick={() => setShowSnapshots((value) => !value)}
+              >
+                {showSnapshots ? "Hide snapshots" : "Show snapshots"}
+              </button>
+              {latestRelease ? (
+                <button
+                  className="text-haze hover:text-white"
+                  onClick={() => setCreateForm((prev) => ({ ...prev, mcVersion: latestRelease }))}
+                >
+                  Use latest release
+                </button>
+              ) : null}
+            </div>
           </Field>
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Loader type">
-              <input
-                value={createForm.loaderType}
-                onChange={(event) => setCreateForm({ ...createForm, loaderType: event.target.value })}
-                className="input"
-                placeholder="fabric"
-              />
+            <Field label="Loader type" error={createErrors.loaderType}>
+              <select
+                value={createForm.loaderType || "none"}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  setCreateForm((prev) => ({
+                    ...prev,
+                    loaderType: value === "none" ? "" : value,
+                    loaderVersion: value === "none" ? "" : prev.loaderVersion
+                  }));
+                }}
+                className={inputClass(createErrors.loaderType)}
+              >
+                <option value="none">None</option>
+                <option value="fabric">Fabric</option>
+              </select>
             </Field>
-            <Field label="Loader version">
-              <input
-                value={createForm.loaderVersion}
-                onChange={(event) => setCreateForm({ ...createForm, loaderVersion: event.target.value })}
-                className="input"
-                placeholder="0.15.7"
-              />
-            </Field>
+            {createForm.loaderType ? (
+              <Field label="Loader version" error={createErrors.loaderVersion}>
+                <select
+                  value={createForm.loaderVersion}
+                  onChange={(event) => setCreateForm({ ...createForm, loaderVersion: event.target.value })}
+                  className={inputClass(createErrors.loaderVersion)}
+                >
+                  <option value="">
+                    {loaderLoading ? "Loading…" : "Select loader version"}
+                  </option>
+                  {loaderVersions.map((version) => (
+                    <option key={version} value={version}>
+                      {version}
+                    </option>
+                  ))}
+                </select>
+                {loaderError ? <div className="mt-1 text-[11px] text-rose-300">{loaderError}</div> : null}
+              </Field>
+            ) : (
+              <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-haze flex items-center">
+                No loader selected
+              </div>
+            )}
           </div>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Java path">
               <input
                 value={createForm.java}
                 onChange={(event) => setCreateForm({ ...createForm, java: event.target.value })}
-                className="input"
+                className={inputClass()}
                 placeholder="/path/to/java"
               />
             </Field>
@@ -869,7 +1198,7 @@ function App() {
               <input
                 value={createForm.memory}
                 onChange={(event) => setCreateForm({ ...createForm, memory: event.target.value })}
-                className="input"
+                className={inputClass()}
                 placeholder="4G"
               />
             </Field>
@@ -878,7 +1207,7 @@ function App() {
             <input
               value={createForm.args}
               onChange={(event) => setCreateForm({ ...createForm, args: event.target.value })}
-              className="input"
+              className={inputClass()}
               placeholder="-Dfile.encoding=UTF-8"
             />
           </Field>
@@ -895,18 +1224,18 @@ function App() {
 
       <Modal open={activeModal === "clone"} onClose={() => setActiveModal(null)} title="Clone profile">
         <div className="space-y-4">
-          <Field label="Source">
+          <Field label="Source" error={cloneErrors.src}>
             <input
               value={cloneForm.src}
               onChange={(event) => setCloneForm({ ...cloneForm, src: event.target.value })}
-              className="input"
+              className={inputClass(cloneErrors.src)}
             />
           </Field>
-          <Field label="Destination id">
+          <Field label="Destination id" error={cloneErrors.dst}>
             <input
               value={cloneForm.dst}
               onChange={(event) => setCloneForm({ ...cloneForm, dst: event.target.value })}
-              className="input"
+              className={inputClass(cloneErrors.dst)}
               placeholder="new-profile"
             />
           </Field>
@@ -924,11 +1253,11 @@ function App() {
       <Modal open={activeModal === "diff"} onClose={() => setActiveModal(null)} title="Diff profiles">
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Profile A">
+            <Field label="Profile A" error={diffErrors.a}>
               <select
                 value={diffForm.a}
                 onChange={(event) => setDiffForm({ ...diffForm, a: event.target.value })}
-                className="input"
+                className={inputClass(diffErrors.a)}
               >
                 <option value="">Select</option>
                 {profiles.map((id) => (
@@ -938,11 +1267,11 @@ function App() {
                 ))}
               </select>
             </Field>
-            <Field label="Profile B">
+            <Field label="Profile B" error={diffErrors.b}>
               <select
                 value={diffForm.b}
                 onChange={(event) => setDiffForm({ ...diffForm, b: event.target.value })}
-                className="input"
+                className={inputClass(diffErrors.b)}
               >
                 <option value="">Select</option>
                 {profiles.map((id) => (
@@ -999,11 +1328,11 @@ function App() {
           {contentForm.input ? (
             <div className="text-xs text-haze font-mono break-all">{contentForm.input}</div>
           ) : null}
-          <Field label="Or paste a URL">
+          <Field label="Or paste a URL" error={contentErrors.input}>
             <input
               value={contentForm.url}
               onChange={(event) => setContentForm({ ...contentForm, url: event.target.value })}
-              className="input"
+              className={inputClass(contentErrors.input)}
               placeholder="https://example.com/mod.jar"
             />
           </Field>
@@ -1012,14 +1341,14 @@ function App() {
               <input
                 value={contentForm.name}
                 onChange={(event) => setContentForm({ ...contentForm, name: event.target.value })}
-                className="input"
+                className={inputClass()}
               />
             </Field>
             <Field label="Version (optional)">
               <input
                 value={contentForm.version}
                 onChange={(event) => setContentForm({ ...contentForm, version: event.target.value })}
-                className="input"
+                className={inputClass()}
               />
             </Field>
           </div>
@@ -1097,6 +1426,13 @@ function App() {
         </div>
       </Modal>
 
+      {confirmState && (
+        <ConfirmModal
+          state={confirmState}
+          onCancel={() => setConfirmState(null)}
+        />
+      )}
+
       {toast && (
         <div className="fixed bottom-6 right-6 z-50 rounded-2xl bg-black/70 border border-white/10 px-4 py-3 shadow-soft">
           <div className="text-sm font-semibold text-mist">{toast.title}</div>
@@ -1117,6 +1453,23 @@ function Chip({ label }: { label: string }) {
   );
 }
 
+function MetaChip({ label }: { label: string }) {
+  return (
+    <span className="inline-flex max-w-[200px] items-center truncate rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] text-haze">
+      {label}
+    </span>
+  );
+}
+
+function Stat({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-left">
+      <div className="text-lg font-semibold text-mist leading-none">{value}</div>
+      <div className="text-[10px] uppercase tracking-widest text-haze font-mono mt-1">{label}</div>
+    </div>
+  );
+}
+
 function Modal({
   open,
   onClose,
@@ -1130,8 +1483,11 @@ function Modal({
 }) {
   if (!open) return null;
   return ReactDOM.createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-6">
-      <div className="glass w-full max-w-2xl rounded-2xl p-6">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-6" onClick={onClose}>
+      <div
+        className="glass w-full max-w-2xl rounded-2xl p-6"
+        onClick={(event) => event.stopPropagation()}
+      >
         <div className="flex items-center justify-between">
           <h3 className="text-lg font-semibold">{title}</h3>
           <button className="text-haze" onClick={onClose}>
@@ -1155,8 +1511,8 @@ function Drawer({
   children: React.ReactNode;
 }) {
   return (
-    <div className="fixed inset-0 z-40 flex justify-end bg-black/30">
-      <div className="panel w-[360px] h-full p-6">
+    <div className="fixed inset-0 z-40 flex justify-end bg-black/30" onClick={onClose}>
+      <div className="panel w-[360px] h-full p-6" onClick={(event) => event.stopPropagation()}>
         <div className="flex items-center justify-between">
           <h3 className="text-lg font-semibold">{title}</h3>
           <button className="text-haze" onClick={onClose}>
@@ -1169,11 +1525,55 @@ function Drawer({
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function ConfirmModal({
+  state,
+  onCancel
+}: {
+  state: ConfirmState;
+  onCancel: () => void;
+}) {
+  return ReactDOM.createPortal(
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-6" onClick={onCancel}>
+      <div
+        className="glass w-full max-w-md rounded-2xl p-6"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <h3 className="text-lg font-semibold">{state.title}</h3>
+        <p className="mt-2 text-sm text-haze">{state.message}</p>
+        <div className="mt-6 flex justify-end gap-2">
+          <button className="btn-secondary" onClick={onCancel}>
+            Cancel
+          </button>
+          <button
+            className={clsx(
+              "btn-primary",
+              state.tone === "danger" && "bg-rose-500 text-white hover:brightness-110"
+            )}
+            onClick={state.onConfirm}
+          >
+            {state.confirmLabel ?? "Confirm"}
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
+function Field({
+  label,
+  error,
+  children
+}: {
+  label: string;
+  error?: string;
+  children: React.ReactNode;
+}) {
   return (
     <label className="block text-xs uppercase tracking-widest text-haze font-mono">
       {label}
       <div className="mt-2">{children}</div>
+      {error ? <div className="mt-1 text-[11px] text-rose-300 normal-case">{error}</div> : null}
     </label>
   );
 }
