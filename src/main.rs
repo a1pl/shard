@@ -536,10 +536,11 @@ fn resolve_launch_account(paths: &Paths, account_id: Option<String>) -> Result<L
         .or_else(|| accounts.active.clone())
         .context("no account selected; use shard account add or shard account use")?;
 
-    let updated_account = {
+    // Refresh MSA token if expired, saving immediately to preserve the new refresh token
+    // in case the subsequent Minecraft exchange fails
+    {
         let account = find_account_mut(&mut accounts, &target)
             .with_context(|| format!("account not found: {target}"))?;
-
         if account.msa.is_expired() {
             let refreshed =
                 refresh_msa_token(&client_id, client_secret, &account.msa.refresh_token)?;
@@ -549,6 +550,13 @@ fn resolve_launch_account(paths: &Paths, account_id: Option<String>) -> Result<L
                 expires_at: refreshed.expires_at,
             };
         }
+    }
+    save_accounts(paths, &accounts)?;
+
+    // Refresh Minecraft token if expired
+    let updated_account = {
+        let account = find_account_mut(&mut accounts, &target)
+            .with_context(|| format!("account not found: {target}"))?;
 
         if account.minecraft.is_expired() {
             let minecraft_auth = exchange_for_minecraft(&account.msa.access_token)?;

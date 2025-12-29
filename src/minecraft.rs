@@ -873,16 +873,21 @@ fn merge_versions(mut parent: VersionJson, mut child: VersionJson) -> VersionJso
     if child.minecraft_arguments.is_none() {
         child.minecraft_arguments = parent.minecraft_arguments.take();
     }
-    if child.arguments.is_none() {
-        child.arguments = parent.arguments.take();
-    } else if let (Some(parent_args), Some(child_args)) =
-        (parent.arguments.take(), child.arguments.take())
-    {
-        let merged = Arguments {
-            game: [parent_args.game, child_args.game].concat(),
-            jvm: [parent_args.jvm, child_args.jvm].concat(),
-        };
-        child.arguments = Some(merged);
+    match (parent.arguments.take(), child.arguments.take()) {
+        (Some(parent_args), Some(child_args)) => {
+            let merged = Arguments {
+                game: [parent_args.game, child_args.game].concat(),
+                jvm: [parent_args.jvm, child_args.jvm].concat(),
+            };
+            child.arguments = Some(merged);
+        }
+        (Some(parent_args), None) => {
+            child.arguments = Some(parent_args);
+        }
+        (None, Some(child_args)) => {
+            child.arguments = Some(child_args);
+        }
+        (None, None) => {}
     }
 
     if !parent.libraries.is_empty() {

@@ -66,6 +66,12 @@ fn populate_dir(
     for item in items {
         let store_path = content_store_path(paths, kind, &item.hash);
         if !store_path.exists() {
+            eprintln!(
+                "warning: {} '{}' not found in store (hash: {}), skipping",
+                kind.label(),
+                item.name,
+                item.hash
+            );
             continue;
         }
 
