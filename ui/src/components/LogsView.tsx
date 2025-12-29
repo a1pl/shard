@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import clsx from "clsx";
 import { useAppStore } from "../store";
 import type { LogEntry, LogFile, LogLevel } from "../types";
+import { formatFileSize, formatTimeAgo } from "../utils";
 
 type LogTab = "latest" | "history" | "crashes";
 
@@ -154,15 +155,6 @@ export function LogsView() {
     return true;
   });
 
-  const formatTime = (timestamp: number): string => {
-    return new Date(timestamp * 1000).toLocaleString();
-  };
-
-  const formatSize = (bytes: number): string => {
-    if (bytes >= 1_000_000) return `${(bytes / 1_000_000).toFixed(1)} MB`;
-    if (bytes >= 1_000) return `${(bytes / 1_000).toFixed(0)} KB`;
-    return `${bytes} B`;
-  };
 
   if (!selectedProfileId) {
     return (
@@ -235,7 +227,7 @@ export function LogsView() {
               <div className="content-item-info">
                 <h5>{file.name}</h5>
                 <p>
-                  {formatSize(file.size)} &middot; {formatTime(file.modified)}
+                  {formatFileSize(file.size)} &middot; {formatTimeAgo(file.modified)}
                   {file.is_current && (
                     <span style={{ marginLeft: 8, color: "var(--accent-primary)" }}>Current</span>
                   )}

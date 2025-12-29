@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from "react";
 import clsx from "clsx";
 import { invoke } from "@tauri-apps/api/core";
 import { Modal } from "../Modal";
+import { ModalFooter } from "../ModalFooter";
 import { Field } from "../Field";
 import { useAppStore } from "../../store";
 import type { ManifestVersion, Template } from "../../types";
@@ -307,10 +308,7 @@ export function CreateProfileModal({ open, onClose, onSubmit }: CreateProfileMod
         <Field label="Extra JVM args (optional)">
           <input className="input" value={form.args} onChange={(e) => setForm({ ...form, args: e.target.value })} placeholder="-Dfile.encoding=UTF-8" />
         </Field>
-        <div className="modal-footer">
-          <button className="btn-secondary" onClick={onClose}>Cancel</button>
-          <button className="btn-primary" onClick={handleSubmit}>Create</button>
-        </div>
+        <ModalFooter onCancel={onClose} onSubmit={handleSubmit} submitLabel="Create" />
       </div>
     </Modal>
   );

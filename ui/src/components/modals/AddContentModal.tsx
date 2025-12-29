@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import clsx from "clsx";
 import { open as dialogOpen } from "@tauri-apps/plugin-dialog";
 import { Modal } from "../Modal";
+import { ModalFooter } from "../ModalFooter";
 import { Field } from "../Field";
 import type { ContentTab } from "../../types";
 import { getContentTypeLabel } from "../../utils";
@@ -61,10 +62,7 @@ export function AddContentModal({ open, kind, onClose, onSubmit }: AddContentMod
             <input className="input" value={form.version} onChange={(e) => setForm({ ...form, version: e.target.value })} />
           </Field>
         </div>
-        <div className="modal-footer">
-          <button className="btn-secondary" onClick={onClose}>Cancel</button>
-          <button className="btn-primary" onClick={handleSubmit}>Add</button>
-        </div>
+        <ModalFooter onCancel={onClose} onSubmit={handleSubmit} submitLabel="Add" />
       </div>
     </Modal>
   );

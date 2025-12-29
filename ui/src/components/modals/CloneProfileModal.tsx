@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import clsx from "clsx";
 import { Modal } from "../Modal";
+import { ModalFooter } from "../ModalFooter";
 import { Field } from "../Field";
 import { useAppStore } from "../../store";
 
@@ -46,10 +47,7 @@ export function CloneProfileModal({ open, onClose, onSubmit }: CloneProfileModal
         <Field label="New profile ID" error={errors.dst}>
           <input className={clsx("input", errors.dst && "input-error")} value={form.dst} onChange={(e) => setForm({ ...form, dst: e.target.value })} placeholder="my-modpack-copy" />
         </Field>
-        <div className="modal-footer">
-          <button className="btn-secondary" onClick={onClose}>Cancel</button>
-          <button className="btn-primary" onClick={handleSubmit}>Clone</button>
-        </div>
+        <ModalFooter onCancel={onClose} onSubmit={handleSubmit} submitLabel="Clone" />
       </div>
     </Modal>
   );

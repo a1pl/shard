@@ -1,4 +1,5 @@
 export { Modal } from "./Modal";
+export { ModalFooter } from "./ModalFooter";
 export { Field } from "./Field";
 export { Toast } from "./Toast";
 export { ConfirmDialog } from "./ConfirmDialog";

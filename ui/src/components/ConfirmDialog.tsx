@@ -1,4 +1,5 @@
 import type { ConfirmState } from "../types";
+import { ModalFooter } from "./ModalFooter";
 
 interface ConfirmDialogProps {
   state: ConfirmState;
@@ -11,12 +12,12 @@ export function ConfirmDialog({ state, onClose }: ConfirmDialogProps) {
       <div className="modal" style={{ maxWidth: 400 }} onClick={(e) => e.stopPropagation()}>
         <h3 className="modal-title">{state.title}</h3>
         <p style={{ margin: 0, fontSize: 14, color: "rgba(255,255,255,0.6)" }}>{state.message}</p>
-        <div className="modal-footer">
-          <button className="btn-secondary" onClick={onClose}>Cancel</button>
-          <button className={state.tone === "danger" ? "btn-danger" : "btn-primary"} onClick={state.onConfirm}>
-            {state.confirmLabel ?? "Confirm"}
-          </button>
-        </div>
+        <ModalFooter
+          onCancel={onClose}
+          onSubmit={state.onConfirm}
+          submitLabel={state.confirmLabel ?? "Confirm"}
+          tone={state.tone}
+        />
       </div>
     </div>
   );
