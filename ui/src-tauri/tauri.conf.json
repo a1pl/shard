@@ -1,0 +1,40 @@
+{
+  "$schema": "https://schema.tauri.app/config/2.0.2",
+  "productName": "Shard",
+  "version": "0.1.0",
+  "identifier": "sh.shard.launcher",
+  "build": {
+    "beforeDevCommand": "bun run dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "bun run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "macOSPrivateApi": true,
+    "windows": [
+      {
+        "label": "main",
+        "title": "Shard",
+        "width": 1280,
+        "height": 760,
+        "resizable": true,
+        "transparent": true,
+        "decorations": true,
+        "titleBarStyle": "Overlay",
+        "hiddenTitle": true,
+        "trafficLightPosition": {
+          "x": 18,
+          "y": 20
+        }
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": ["icons/icon.png"]
+  }
+}

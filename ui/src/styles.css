@@ -1,0 +1,95 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@font-face {
+  font-family: "Geist";
+  src: url("/fonts/Geist-VariableFont_wght.ttf") format("truetype-variations");
+  font-weight: 300 700;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Geist Mono";
+  src: url("/fonts/GeistMono-VariableFont_wght.ttf") format("truetype-variations");
+  font-weight: 300 700;
+  font-display: swap;
+}
+
+:root {
+  --font-sans: "Geist";
+  --font-mono: "Geist Mono";
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background:
+    radial-gradient(1200px 600px at 20% 0%, rgba(124, 199, 255, 0.08), transparent 55%),
+    radial-gradient(900px 600px at 80% 10%, rgba(244, 178, 127, 0.08), transparent 60%),
+    radial-gradient(800px 400px at 50% 100%, rgba(255, 255, 255, 0.04), transparent 65%),
+    #0c0f13;
+  color: #e4e7eb;
+  font-family: var(--font-sans);
+  letter-spacing: -0.01em;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+.glass {
+  background: rgba(17, 20, 26, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(20px);
+}
+
+.panel {
+  background: rgba(22, 27, 34, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(18px);
+}
+
+.soft-divider {
+  border-color: rgba(255, 255, 255, 0.06);
+}
+
+.nebula {
+  background: linear-gradient(120deg, rgba(124, 199, 255, 0.12), rgba(244, 178, 127, 0.08));
+}
+
+.fade-in {
+  animation: fadeIn 0.35s ease-out;
+}
+
+@layer components {
+  .input {
+    @apply w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2 text-sm text-mist outline-none focus:border-accent/50;
+  }
+
+  .btn-primary {
+    @apply rounded-full bg-accent text-ink px-4 py-2 text-sm font-medium hover:brightness-110 disabled:opacity-50;
+  }
+
+  .btn-secondary {
+    @apply rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-mist hover:border-white/20;
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
