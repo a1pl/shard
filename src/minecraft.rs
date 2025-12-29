@@ -818,7 +818,11 @@ struct RuleContext {
 impl RuleContext {
     fn new() -> Self {
         let os_name = os_key();
-        let os_arch = std::env::consts::ARCH.to_string();
+        // Normalize architecture names for Minecraft manifest compatibility
+        let os_arch = match std::env::consts::ARCH {
+            "aarch64" => "arm64".to_string(),
+            arch => arch.to_string(),
+        };
         let mut features = HashMap::new();
         features.insert("is_demo_user".to_string(), false);
         features.insert("has_custom_resolution".to_string(), false);
@@ -924,8 +928,9 @@ fn merge_versions(mut parent: VersionJson, mut child: VersionJson) -> VersionJso
     }
 
     if !parent.libraries.is_empty() {
-        let mut merged = parent.libraries.clone();
-        merged.extend(child.libraries.clone());
+        // Child libraries come first so mod loaders can override vanilla classes
+        let mut merged = child.libraries.clone();
+        merged.extend(parent.libraries.clone());
         child.libraries = merged;
     }
 
