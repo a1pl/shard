@@ -215,16 +215,33 @@ fn load_version_json(paths: &Paths, id: &str) -> Result<VersionJson> {
 }
 
 fn load_version_manifest(paths: &Paths) -> Result<VersionManifest> {
+    const CACHE_TTL_SECS: u64 = 24 * 60 * 60; // 24 hours
+
     let cache_path = paths.cache_manifest("version_manifest_v2.json");
     if cache_path.exists() {
-        let data = fs::read_to_string(&cache_path).with_context(|| {
-            format!(
-                "failed to read version manifest cache: {}",
-                cache_path.display()
-            )
-        })?;
-        if let Ok(manifest) = serde_json::from_str::<VersionManifest>(&data) {
-            return Ok(manifest);
+        // Check if cache is still valid (within TTL)
+        let cache_valid = cache_path
+            .metadata()
+            .ok()
+            .and_then(|m| m.modified().ok())
+            .and_then(|modified| {
+                std::time::SystemTime::now()
+                    .duration_since(modified)
+                    .ok()
+            })
+            .map(|age| age.as_secs() < CACHE_TTL_SECS)
+            .unwrap_or(false);
+
+        if cache_valid {
+            let data = fs::read_to_string(&cache_path).with_context(|| {
+                format!(
+                    "failed to read version manifest cache: {}",
+                    cache_path.display()
+                )
+            })?;
+            if let Ok(manifest) = serde_json::from_str::<VersionManifest>(&data) {
+                return Ok(manifest);
+            }
         }
     }
 
