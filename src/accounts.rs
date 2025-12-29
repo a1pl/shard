@@ -108,9 +108,10 @@ pub fn upsert_account(accounts: &mut Accounts, account: Account) {
 }
 
 pub fn remove_account(accounts: &mut Accounts, id: &str) -> bool {
+    let id_lower = id.to_lowercase();
     let mut removed_uuids = Vec::new();
     for account in &accounts.accounts {
-        if account.uuid == id || account.username == id {
+        if account.uuid == id || account.username.to_lowercase() == id_lower {
             removed_uuids.push(account.uuid.clone());
         }
     }
@@ -128,17 +129,14 @@ pub fn remove_account(accounts: &mut Accounts, id: &str) -> bool {
 }
 
 pub fn set_active(accounts: &mut Accounts, id: &str) -> bool {
-    if accounts
+    let id_lower = id.to_lowercase();
+    if let Some(uuid) = accounts
         .accounts
         .iter()
-        .any(|account| account.uuid == id || account.username == id)
+        .find(|account| account.uuid == id || account.username.to_lowercase() == id_lower)
+        .map(|account| account.uuid.clone())
     {
-        let uuid = accounts
-            .accounts
-            .iter()
-            .find(|account| account.uuid == id || account.username == id)
-            .map(|account| account.uuid.clone());
-        accounts.active = uuid;
+        accounts.active = Some(uuid);
         return true;
     }
     false
