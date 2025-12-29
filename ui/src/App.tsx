@@ -709,8 +709,12 @@ function App() {
   };
 
   return (
-    <div className="min-h-screen p-5">
-      <div className="glass rounded-[32px] p-5 shadow-glow fade-in min-h-[calc(100vh-40px)] flex flex-col">
+    <div className="min-h-screen px-5 pb-5 pt-10">
+      <div
+        data-tauri-drag-region
+        className="fixed top-0 left-0 right-0 h-7 z-50 bg-black/25 backdrop-blur"
+      />
+      <div className="glass rounded-[32px] p-5 shadow-glow fade-in min-h-[calc(100vh-52px)] flex flex-col">
         <header
           data-tauri-drag-region
           className="flex flex-wrap items-center justify-between gap-4 border-b border-white/10 pb-4"
