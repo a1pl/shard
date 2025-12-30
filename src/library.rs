@@ -223,17 +223,16 @@ impl Library {
             .as_ref()
             .and_then(|s| LibraryContentType::from_str(s))
             .unwrap_or(LibraryContentType::Mod);
-        let name = input.name.clone().unwrap_or_else(|| {
-            input
-                .file_name
-                .clone()
-                .unwrap_or_else(|| format!("item-{}", hash.get(..8).unwrap_or(&hash)))
-        });
+        // Compute default name only for INSERT (not for upsert update)
+        let default_name = input
+            .file_name
+            .clone()
+            .unwrap_or_else(|| format!("item-{}", &hash[..hash.len().min(8)]));
 
         self.conn.execute(
             r#"
             INSERT INTO library_items (hash, content_type, name, file_name, file_size, source_url, source_platform, source_project_id, source_version, notes)
-            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+            VALUES (?1, ?2, COALESCE(?3, ?11), ?4, ?5, ?6, ?7, ?8, ?9, ?10)
             ON CONFLICT(hash) DO UPDATE SET
                 name = COALESCE(?3, name),
                 file_name = COALESCE(?4, file_name),
@@ -248,7 +247,7 @@ impl Library {
             params![
                 hash,
                 content_type.as_str(),
-                name,
+                input.name,
                 input.file_name,
                 input.file_size,
                 input.source_url,
@@ -256,6 +255,7 @@ impl Library {
                 input.source_project_id,
                 input.source_version,
                 input.notes,
+                default_name,
             ],
         )
         .context("failed to add library item")?;
@@ -695,7 +695,7 @@ impl Library {
             .file_stem()
             .and_then(|s| s.to_str())
             .map(String::from)
-            .unwrap_or_else(|| format!("item-{}", &hash[..8]));
+            .unwrap_or_else(|| format!("item-{}", &hash[..hash.len().min(8)]));
 
         // Copy to content store
         let store_path = self.content_store_path(paths, content_type, &hash);
