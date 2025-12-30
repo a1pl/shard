@@ -15,11 +15,11 @@ export function ModalFooter({
 }: ModalFooterProps) {
   return (
     <div className="modal-footer">
-      <button className="btn-secondary" onClick={onCancel}>
+      <button className="btn btn-secondary" onClick={onCancel}>
         {cancelLabel}
       </button>
       <button
-        className={tone === "danger" ? "btn-danger" : "btn-primary"}
+        className={tone === "danger" ? "btn btn-danger" : "btn btn-primary"}
         onClick={onSubmit}
       >
         {submitLabel}
