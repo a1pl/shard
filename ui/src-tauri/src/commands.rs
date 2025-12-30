@@ -28,6 +28,7 @@ use shard::skin::{
 };
 use shard::store::{ContentKind, store_content};
 use shard::template::{Template, list_templates, load_template, init_builtin_templates};
+use shard::updates::{StorageStats, UpdateCheckResult, get_storage_stats, check_all_updates, check_profile_updates, set_content_pinned, apply_update};
 use std::path::PathBuf;
 use std::process::Command;
 use tauri::{AppHandle, Emitter};
@@ -238,6 +239,10 @@ fn add_content(
         version,
         source: stored.source,
         file_name: Some(stored.file_name),
+        platform: None, // Manual import via UI
+        project_id: None,
+        version_id: None,
+        pinned: false,
     };
 
     let changed = match kind {
@@ -747,6 +752,7 @@ fn parse_content_type(s: &str) -> Result<ContentType, String> {
 pub fn store_search_cmd(input: StoreSearchInput) -> Result<Vec<ContentItem>, String> {
     let paths = load_paths()?;
     let config = load_config(&paths).map_err(|e| e.to_string())?;
+    let has_cf_key = config.curseforge_api_key.is_some();
     let store = ContentStore::new(config.curseforge_api_key.as_deref());
 
     let content_type = input.content_type.as_ref()
@@ -764,7 +770,12 @@ pub fn store_search_cmd(input: StoreSearchInput) -> Result<Vec<ContentItem>, Str
 
     match input.platform.as_deref() {
         Some("modrinth") => store.search_modrinth(&options).map_err(|e| e.to_string()),
-        Some("curseforge") => Err("CurseForge search requires API key".to_string()),
+        Some("curseforge") => {
+            if !has_cf_key {
+                return Err("CurseForge search requires an API key. Add it in Settings.".to_string());
+            }
+            store.search_curseforge_only(&options).map_err(|e| e.to_string())
+        }
         _ => store.search(&options).map_err(|e| e.to_string()),
     }
 }
@@ -854,7 +865,13 @@ pub fn store_install_cmd(input: StoreInstallInput) -> Result<Profile, String> {
     };
 
     // Download and store
-    let content_ref = store.download_to_store(&paths, &version, ct).map_err(|e| e.to_string())?;
+    let mut content_ref = store.download_to_store(&paths, &version, ct).map_err(|e| e.to_string())?;
+
+    // Add platform/project tracking for update checking
+    content_ref.platform = Some(input.platform.clone());
+    content_ref.project_id = Some(input.project_id.clone());
+    content_ref.version_id = Some(version.id.clone());
+    content_ref.pinned = false;
 
     // Auto-add to library
     if let Ok(library) = Library::from_paths(&paths) {
@@ -1030,13 +1047,9 @@ pub fn fetch_minecraft_versions_cmd() -> Result<MinecraftVersionsResponse, Strin
     })
 }
 
+/// Fabric loader version entry from the Fabric Meta API
 #[derive(Clone, Deserialize)]
 struct FabricLoaderEntry {
-    loader: FabricLoaderInfo,
-}
-
-#[derive(Clone, Deserialize)]
-struct FabricLoaderInfo {
     version: String,
 }
 
@@ -1056,7 +1069,7 @@ pub fn fetch_fabric_versions_cmd() -> Result<Vec<String>, String> {
         .json()
         .map_err(|e| format!("Failed to parse Fabric versions: {}", e))?;
 
-    let versions: Vec<String> = entries.into_iter().map(|e| e.loader.version).collect();
+    let versions: Vec<String> = entries.into_iter().map(|e| e.version).collect();
     Ok(versions)
 }
 
@@ -1180,6 +1193,28 @@ pub fn library_delete_item_cmd(id: i64, delete_file: bool) -> Result<bool, Strin
 }
 
 #[tauri::command]
+pub fn library_get_item_path_cmd(id: i64) -> Result<Option<String>, String> {
+    let paths = load_paths()?;
+    let library = Library::from_paths(&paths).map_err(|e| e.to_string())?;
+
+    if let Some(item) = library.get_item(id).map_err(|e| e.to_string())? {
+        let store_path = match item.content_type {
+            LibraryContentType::Mod => paths.store_mod_path(&item.hash),
+            LibraryContentType::ResourcePack => paths.store_resourcepack_path(&item.hash),
+            LibraryContentType::ShaderPack => paths.store_shaderpack_path(&item.hash),
+            LibraryContentType::Skin => paths.store_skin_path(&item.hash),
+        };
+        if store_path.exists() {
+            Ok(Some(store_path.to_string_lossy().to_string()))
+        } else {
+            Ok(None)
+        }
+    } else {
+        Ok(None)
+    }
+}
+
+#[tauri::command]
 pub fn library_import_file_cmd(path: String, content_type: String) -> Result<LibraryItem, String> {
     let paths = load_paths()?;
     let library = Library::from_paths(&paths).map_err(|e| e.to_string())?;
@@ -1254,6 +1289,10 @@ pub fn library_add_to_profile_cmd(profile_id: String, item_id: i64) -> Result<Pr
         version: item.source_version.clone(),
         source: item.source_url.clone(),
         file_name: item.file_name.clone(),
+        platform: item.source_platform.clone(),
+        project_id: item.source_project_id.clone(),
+        version_id: None, // Library items may not have version IDs
+        pinned: false,
     };
 
     match item.content_type {
@@ -1268,4 +1307,72 @@ pub fn library_add_to_profile_cmd(profile_id: String, item_id: i64) -> Result<Pr
 
     save_profile(&paths, &profile).map_err(|e| e.to_string())?;
     Ok(profile)
+}
+
+// ============================================================================
+// Settings and Storage Stats Commands
+// ============================================================================
+
+#[tauri::command]
+pub fn get_storage_stats_cmd() -> Result<StorageStats, String> {
+    let paths = load_paths()?;
+    get_storage_stats(&paths).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn get_auto_update_enabled_cmd() -> Result<bool, String> {
+    let paths = load_paths()?;
+    let config = load_config(&paths).map_err(|e| e.to_string())?;
+    Ok(config.auto_update_enabled)
+}
+
+#[tauri::command]
+pub fn set_auto_update_enabled_cmd(enabled: bool) -> Result<Config, String> {
+    let paths = load_paths()?;
+    let mut config = load_config(&paths).map_err(|e| e.to_string())?;
+    config.auto_update_enabled = enabled;
+    save_config(&paths, &config).map_err(|e| e.to_string())?;
+    Ok(config)
+}
+
+// ============================================================================
+// Update Checking Commands
+// ============================================================================
+
+#[tauri::command]
+pub fn check_all_updates_cmd() -> Result<UpdateCheckResult, String> {
+    let paths = load_paths()?;
+    let config = load_config(&paths).map_err(|e| e.to_string())?;
+    check_all_updates(&paths, config.curseforge_api_key.as_deref()).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn check_profile_updates_cmd(profile_id: String) -> Result<UpdateCheckResult, String> {
+    let paths = load_paths()?;
+    let config = load_config(&paths).map_err(|e| e.to_string())?;
+    check_profile_updates(&paths, &profile_id, config.curseforge_api_key.as_deref()).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn apply_content_update_cmd(
+    profile_id: String,
+    content_name: String,
+    content_type: String,
+    new_version_id: String,
+) -> Result<Profile, String> {
+    let paths = load_paths()?;
+    let config = load_config(&paths).map_err(|e| e.to_string())?;
+    apply_update(&paths, &profile_id, &content_name, &content_type, &new_version_id, config.curseforge_api_key.as_deref())
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn set_content_pinned_cmd(
+    profile_id: String,
+    content_name: String,
+    content_type: String,
+    pinned: bool,
+) -> Result<Profile, String> {
+    let paths = load_paths()?;
+    set_content_pinned(&paths, &profile_id, &content_name, &content_type, pinned).map_err(|e| e.to_string())
 }

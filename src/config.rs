@@ -12,6 +12,13 @@ pub struct Config {
     pub msa_client_secret: Option<String>,
     #[serde(default)]
     pub curseforge_api_key: Option<String>,
+    /// Whether to automatically check for content updates on launcher start
+    #[serde(default = "default_auto_update")]
+    pub auto_update_enabled: bool,
+}
+
+fn default_auto_update() -> bool {
+    true
 }
 
 pub fn load_config(paths: &Paths) -> Result<Config> {
@@ -25,31 +32,40 @@ pub fn load_config(paths: &Paths) -> Result<Config> {
     };
 
     if let Ok(value) = std::env::var("SHARD_MS_CLIENT_ID") {
-        if !value.trim().is_empty() {
-            config.msa_client_id = Some(value);
+        let trimmed = value.trim().to_string();
+        if !trimmed.is_empty() {
+            config.msa_client_id = Some(trimmed);
         }
-    } else if let Ok(value) = std::env::var("MICROSOFT_CLIENT_ID")
-        && !value.trim().is_empty() {
-            config.msa_client_id = Some(value);
+    } else if let Ok(value) = std::env::var("MICROSOFT_CLIENT_ID") {
+        let trimmed = value.trim().to_string();
+        if !trimmed.is_empty() {
+            config.msa_client_id = Some(trimmed);
         }
+    }
 
     if let Ok(value) = std::env::var("SHARD_MS_CLIENT_SECRET") {
-        if !value.trim().is_empty() {
-            config.msa_client_secret = Some(value);
+        let trimmed = value.trim().to_string();
+        if !trimmed.is_empty() {
+            config.msa_client_secret = Some(trimmed);
         }
-    } else if let Ok(value) = std::env::var("MICROSOFT_CLIENT_SECRET")
-        && !value.trim().is_empty() {
-            config.msa_client_secret = Some(value);
+    } else if let Ok(value) = std::env::var("MICROSOFT_CLIENT_SECRET") {
+        let trimmed = value.trim().to_string();
+        if !trimmed.is_empty() {
+            config.msa_client_secret = Some(trimmed);
         }
+    }
 
     if let Ok(value) = std::env::var("SHARD_CURSEFORGE_API_KEY") {
-        if !value.trim().is_empty() {
-            config.curseforge_api_key = Some(value);
+        let trimmed = value.trim().to_string();
+        if !trimmed.is_empty() {
+            config.curseforge_api_key = Some(trimmed);
         }
-    } else if let Ok(value) = std::env::var("CURSEFORGE_API_KEY")
-        && !value.trim().is_empty() {
-            config.curseforge_api_key = Some(value);
+    } else if let Ok(value) = std::env::var("CURSEFORGE_API_KEY") {
+        let trimmed = value.trim().to_string();
+        if !trimmed.is_empty() {
+            config.curseforge_api_key = Some(trimmed);
         }
+    }
 
     Ok(config)
 }

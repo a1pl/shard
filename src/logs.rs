@@ -335,16 +335,17 @@ impl LogWatcher {
         // Seek to last position
         file.seek(SeekFrom::Start(self.position))?;
 
-        let reader = BufReader::new(&file);
+        let mut reader = BufReader::new(&mut file);
         let mut entries = Vec::new();
 
-        for line in reader.lines().map_while(Result::ok) {
+        for line in (&mut reader).lines().map_while(Result::ok) {
             self.line_number += 1;
             entries.push(parse_log_line(&line, self.line_number));
         }
 
-        // Update position
-        self.position = current_size;
+        // Update position to actual file position after reading
+        // This avoids race conditions if the file grew during reading
+        self.position = reader.stream_position()?;
 
         Ok(entries)
     }

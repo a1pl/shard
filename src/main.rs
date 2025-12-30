@@ -371,6 +371,15 @@ enum StorePlatform {
     Curseforge,
 }
 
+impl StorePlatform {
+    fn as_str(&self) -> &'static str {
+        match self {
+            StorePlatform::Modrinth => "modrinth",
+            StorePlatform::Curseforge => "curseforge",
+        }
+    }
+}
+
 impl From<StorePlatform> for Platform {
     fn from(p: StorePlatform) -> Self {
         match p {
@@ -652,6 +661,10 @@ fn run() -> Result<()> {
                     version,
                     source: stored.source,
                     file_name: Some(stored.file_name),
+                    platform: None, // CLI imports are local
+                    project_id: None,
+                    version_id: None,
+                    pinned: false,
                 };
                 let changed = upsert_mod(&mut profile_data, mod_ref);
                 save_profile(&paths, &profile_data)?;
@@ -758,6 +771,10 @@ fn handle_pack_command(paths: &Paths, kind: ContentKind, command: PackCommand) -
                 version,
                 source: stored.source,
                 file_name: Some(stored.file_name),
+                platform: None, // CLI imports are local
+                project_id: None,
+                version_id: None,
+                pinned: false,
             };
             let changed = match kind {
                 ContentKind::ResourcePack => upsert_resourcepack(&mut profile_data, pack_ref),
@@ -1138,9 +1155,7 @@ fn handle_store_command(paths: &Paths, command: StoreCommand) -> Result<()> {
 
             let results = match platform {
                 Some(StorePlatform::Modrinth) => store.search_modrinth(&options)?,
-                Some(StorePlatform::Curseforge) => {
-                    bail!("CurseForge search requires API key; use --platform modrinth or configure API key")
-                }
+                Some(StorePlatform::Curseforge) => store.search_curseforge_only(&options)?,
                 None => store.search(&options)?,
             };
 
@@ -1248,7 +1263,13 @@ fn handle_store_command(paths: &Paths, command: StoreCommand) -> Result<()> {
             };
 
             // Download and store
-            let content_ref = store.download_to_store(paths, &ver, ct)?;
+            let mut content_ref = store.download_to_store(paths, &ver, ct)?;
+
+            // Add platform/project tracking for update checking
+            content_ref.platform = Some(platform.as_str().to_string());
+            content_ref.project_id = Some(project.clone());
+            content_ref.version_id = Some(ver.id.clone());
+            content_ref.pinned = false;
 
             // Add to profile
             let changed = match ct {
@@ -1462,18 +1483,28 @@ fn create_profile_from_template(
                 }
             }
             ContentSource::Url { url } => {
-                let (path, source, file_name) = resolve_input(paths, url)?;
-                match store_content(paths, ContentKind::Mod, &path, source, file_name) {
-                    Ok(stored) => {
-                        let content_ref = ContentRef {
-                            name: mod_content.name.clone(),
-                            hash: stored.hash,
-                            version: mod_content.version.clone(),
-                            source: stored.source,
-                            file_name: Some(stored.file_name),
-                        };
-                        upsert_mod(&mut profile, content_ref);
-                        println!("  + {}", mod_content.name);
+                match resolve_input(paths, url) {
+                    Ok((path, source, file_name)) => {
+                        match store_content(paths, ContentKind::Mod, &path, source, file_name) {
+                            Ok(stored) => {
+                                let content_ref = ContentRef {
+                                    name: mod_content.name.clone(),
+                                    hash: stored.hash,
+                                    version: mod_content.version.clone(),
+                                    source: stored.source,
+                                    file_name: Some(stored.file_name),
+                                    platform: None,
+                                    project_id: None,
+                                    version_id: None,
+                                    pinned: false,
+                                };
+                                upsert_mod(&mut profile, content_ref);
+                                println!("  + {}", mod_content.name);
+                            }
+                            Err(e) => {
+                                println!("  ! {} (download failed: {e})", mod_content.name);
+                            }
+                        }
                     }
                     Err(e) => {
                         println!("  ! {} (download failed: {e})", mod_content.name);
@@ -1514,18 +1545,29 @@ fn create_profile_from_template(
                 }
             }
             ContentSource::Url { url } => {
-                let (path, source, file_name) = resolve_input(paths, url)?;
-                match store_content(paths, ContentKind::ShaderPack, &path, source, file_name) {
-                    Ok(stored) => {
-                        let content_ref = ContentRef {
-                            name: shader.name.clone(),
-                            hash: stored.hash,
-                            version: shader.version.clone(),
-                            source: stored.source,
-                            file_name: Some(stored.file_name),
-                        };
-                        upsert_shaderpack(&mut profile, content_ref);
-                        println!("  + {} (shader)", shader.name);
+                match resolve_input(paths, url) {
+                    Ok((path, source, file_name)) => {
+                        match store_content(paths, ContentKind::ShaderPack, &path, source, file_name)
+                        {
+                            Ok(stored) => {
+                                let content_ref = ContentRef {
+                                    name: shader.name.clone(),
+                                    hash: stored.hash,
+                                    version: shader.version.clone(),
+                                    source: stored.source,
+                                    file_name: Some(stored.file_name),
+                                    platform: None,
+                                    project_id: None,
+                                    version_id: None,
+                                    pinned: false,
+                                };
+                                upsert_shaderpack(&mut profile, content_ref);
+                                println!("  + {} (shader)", shader.name);
+                            }
+                            Err(e) => {
+                                println!("  ! {} (download failed: {e})", shader.name);
+                            }
+                        }
                     }
                     Err(e) => {
                         println!("  ! {} (download failed: {e})", shader.name);
@@ -1561,18 +1603,29 @@ fn create_profile_from_template(
                 }
             }
             ContentSource::Url { url } => {
-                let (path, source, file_name) = resolve_input(paths, url)?;
-                match store_content(paths, ContentKind::ResourcePack, &path, source, file_name) {
-                    Ok(stored) => {
-                        let content_ref = ContentRef {
-                            name: pack.name.clone(),
-                            hash: stored.hash,
-                            version: pack.version.clone(),
-                            source: stored.source,
-                            file_name: Some(stored.file_name),
-                        };
-                        upsert_resourcepack(&mut profile, content_ref);
-                        println!("  + {} (resourcepack)", pack.name);
+                match resolve_input(paths, url) {
+                    Ok((path, source, file_name)) => {
+                        match store_content(paths, ContentKind::ResourcePack, &path, source, file_name)
+                        {
+                            Ok(stored) => {
+                                let content_ref = ContentRef {
+                                    name: pack.name.clone(),
+                                    hash: stored.hash,
+                                    version: pack.version.clone(),
+                                    source: stored.source,
+                                    file_name: Some(stored.file_name),
+                                    platform: None,
+                                    project_id: None,
+                                    version_id: None,
+                                    pinned: false,
+                                };
+                                upsert_resourcepack(&mut profile, content_ref);
+                                println!("  + {} (resourcepack)", pack.name);
+                            }
+                            Err(e) => {
+                                println!("  ! {} (download failed: {e})", pack.name);
+                            }
+                        }
                     }
                     Err(e) => {
                         println!("  ! {} (download failed: {e})", pack.name);

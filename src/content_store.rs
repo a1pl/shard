@@ -248,7 +248,21 @@ impl ContentStore {
             .collect())
     }
 
-    /// Search only CurseForge
+    /// Check if CurseForge is available
+    pub fn has_curseforge(&self) -> bool {
+        self.curseforge.is_some()
+    }
+
+    /// Search only CurseForge (public API)
+    pub fn search_curseforge_only(&self, options: &SearchOptions) -> Result<Vec<ContentItem>> {
+        let cf = self
+            .curseforge
+            .as_ref()
+            .context("CurseForge API key not configured")?;
+        self.search_curseforge(cf, options)
+    }
+
+    /// Search only CurseForge (internal)
     fn search_curseforge(
         &self,
         cf: &CurseForgeClient,
@@ -513,6 +527,10 @@ impl ContentStore {
             version: Some(version.version.clone()),
             source: stored.source,
             file_name: Some(stored.file_name),
+            platform: None, // Set by caller after download
+            project_id: None,
+            version_id: None,
+            pinned: false,
         })
     }
 }
