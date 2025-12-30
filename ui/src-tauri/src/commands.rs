@@ -7,7 +7,7 @@ use shard::logs::{LogEntry, LogFile, list_log_files, list_crash_reports, read_lo
 use shard::minecraft::{LaunchPlan, prepare};
 use shard::ops::{finish_device_code_flow, parse_loader, resolve_input, resolve_launch_account};
 use shard::paths::Paths;
-use shard::profile::{ContentRef, Loader, Profile, Runtime, clone_profile, create_profile, diff_profiles, load_profile, save_profile, upsert_mod, upsert_resourcepack, upsert_shaderpack, remove_mod, remove_resourcepack, remove_shaderpack, list_profiles};
+use shard::profile::{ContentRef, Loader, Profile, Runtime, clone_profile, create_profile, delete_profile, diff_profiles, load_profile, save_profile, upsert_mod, upsert_resourcepack, upsert_shaderpack, remove_mod, remove_resourcepack, remove_shaderpack, list_profiles};
 use shard::skin::{MinecraftProfile, get_profile as get_mc_profile, get_avatar_url, get_body_url, get_skin_url, get_cape_url, upload_skin, set_skin_url, reset_skin, set_cape, hide_cape, SkinVariant};
 use shard::store::{ContentKind, store_content};
 use shard::template::{Template, list_templates, load_template, init_builtin_templates};
@@ -150,6 +150,12 @@ pub fn create_profile_cmd(input: CreateProfileInput) -> Result<Profile, String> 
 pub fn clone_profile_cmd(src: String, dst: String) -> Result<Profile, String> {
     let paths = load_paths()?;
     clone_profile(&paths, &src, &dst).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn delete_profile_cmd(id: String) -> Result<(), String> {
+    let paths = load_paths()?;
+    delete_profile(&paths, &id).map_err(|e| e.to_string())
 }
 
 #[tauri::command]

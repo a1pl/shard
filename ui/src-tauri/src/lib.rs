@@ -11,6 +11,7 @@ pub fn run() {
             commands::load_profile_cmd,
             commands::create_profile_cmd,
             commands::clone_profile_cmd,
+            commands::delete_profile_cmd,
             commands::diff_profiles_cmd,
             commands::add_mod_cmd,
             commands::add_resourcepack_cmd,

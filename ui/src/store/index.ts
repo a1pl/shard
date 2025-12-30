@@ -14,7 +14,11 @@ import type {
   DeviceCode,
   DiffResult,
   ManifestVersion,
+  ProfileFolder,
+  ProfileOrganization,
 } from "../types";
+
+const PROFILE_ORG_KEY = "shard:profile-organization";
 
 interface AppState {
   // Core data
@@ -35,6 +39,10 @@ interface AppState {
   isWorking: boolean;
   confirmState: ConfirmState | null;
   debugDrag: boolean;
+
+  // Profile organization (folders)
+  profileOrg: ProfileOrganization;
+  contextMenuTarget: { type: "profile" | "folder"; id: string; x: number; y: number } | null;
 
   // Modal-specific state
   plan: LaunchPlan | null;
@@ -72,6 +80,16 @@ interface AppState {
   setMcVersionLoading: (loading: boolean) => void;
   setLoaderVersions: (versions: string[]) => void;
   setLoaderLoading: (loading: boolean) => void;
+  setContextMenuTarget: (target: { type: "profile" | "folder"; id: string; x: number; y: number } | null) => void;
+
+  // Profile organization actions
+  createFolder: (name: string) => void;
+  renameFolder: (folderId: string, name: string) => void;
+  deleteFolder: (folderId: string) => void;
+  toggleFolderCollapsed: (folderId: string) => void;
+  moveProfileToFolder: (profileId: string, folderId: string | null) => void;
+  loadProfileOrganization: () => void;
+  syncProfileOrganization: () => void;
 
   // Async actions
   loadProfiles: () => Promise<void>;
@@ -102,6 +120,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   isWorking: false,
   confirmState: null,
   debugDrag: false,
+  profileOrg: { folders: [], ungrouped: [] },
+  contextMenuTarget: null,
   plan: null,
   deviceCode: null,
   devicePending: false,
@@ -135,6 +155,115 @@ export const useAppStore = create<AppState>((set, get) => ({
   setMcVersionLoading: (mcVersionLoading) => set({ mcVersionLoading }),
   setLoaderVersions: (loaderVersions) => set({ loaderVersions }),
   setLoaderLoading: (loaderLoading) => set({ loaderLoading }),
+  setContextMenuTarget: (contextMenuTarget) => set({ contextMenuTarget }),
+
+  // Profile organization actions
+  createFolder: (name: string) => {
+    const { profileOrg } = get();
+    const id = `folder-${Date.now()}`;
+    const newFolder: ProfileFolder = { id, name, profiles: [], collapsed: false };
+    const newOrg = { ...profileOrg, folders: [...profileOrg.folders, newFolder] };
+    set({ profileOrg: newOrg });
+    localStorage.setItem(PROFILE_ORG_KEY, JSON.stringify(newOrg));
+  },
+
+  renameFolder: (folderId: string, name: string) => {
+    const { profileOrg } = get();
+    const newOrg = {
+      ...profileOrg,
+      folders: profileOrg.folders.map((f) => (f.id === folderId ? { ...f, name } : f)),
+    };
+    set({ profileOrg: newOrg });
+    localStorage.setItem(PROFILE_ORG_KEY, JSON.stringify(newOrg));
+  },
+
+  deleteFolder: (folderId: string) => {
+    const { profileOrg } = get();
+    const folder = profileOrg.folders.find((f) => f.id === folderId);
+    const newOrg = {
+      folders: profileOrg.folders.filter((f) => f.id !== folderId),
+      ungrouped: [...profileOrg.ungrouped, ...(folder?.profiles ?? [])],
+    };
+    set({ profileOrg: newOrg });
+    localStorage.setItem(PROFILE_ORG_KEY, JSON.stringify(newOrg));
+  },
+
+  toggleFolderCollapsed: (folderId: string) => {
+    const { profileOrg } = get();
+    const newOrg = {
+      ...profileOrg,
+      folders: profileOrg.folders.map((f) =>
+        f.id === folderId ? { ...f, collapsed: !f.collapsed } : f
+      ),
+    };
+    set({ profileOrg: newOrg });
+    localStorage.setItem(PROFILE_ORG_KEY, JSON.stringify(newOrg));
+  },
+
+  moveProfileToFolder: (profileId: string, folderId: string | null) => {
+    const { profileOrg } = get();
+    // Remove from current location
+    let newFolders = profileOrg.folders.map((f) => ({
+      ...f,
+      profiles: f.profiles.filter((p) => p !== profileId),
+    }));
+    let newUngrouped = profileOrg.ungrouped.filter((p) => p !== profileId);
+
+    // Add to new location
+    if (folderId === null) {
+      newUngrouped = [...newUngrouped, profileId];
+    } else {
+      newFolders = newFolders.map((f) =>
+        f.id === folderId ? { ...f, profiles: [...f.profiles, profileId] } : f
+      );
+    }
+
+    const newOrg = { folders: newFolders, ungrouped: newUngrouped };
+    set({ profileOrg: newOrg });
+    localStorage.setItem(PROFILE_ORG_KEY, JSON.stringify(newOrg));
+  },
+
+  loadProfileOrganization: () => {
+    try {
+      const stored = localStorage.getItem(PROFILE_ORG_KEY);
+      if (stored) {
+        set({ profileOrg: JSON.parse(stored) });
+      }
+    } catch {
+      // Ignore parse errors
+    }
+  },
+
+  syncProfileOrganization: () => {
+    const { profiles, profileOrg } = get();
+    const allOrganized = new Set([
+      ...profileOrg.folders.flatMap((f) => f.profiles),
+      ...profileOrg.ungrouped,
+    ]);
+
+    // Find profiles that exist but aren't organized
+    const newProfiles = profiles.filter((p) => !allOrganized.has(p));
+    // Find organized profiles that no longer exist
+    const validFolders = profileOrg.folders.map((f) => ({
+      ...f,
+      profiles: f.profiles.filter((p) => profiles.includes(p)),
+    }));
+    const validUngrouped = profileOrg.ungrouped.filter((p) => profiles.includes(p));
+
+    const newOrg = {
+      folders: validFolders,
+      ungrouped: [...validUngrouped, ...newProfiles],
+    };
+
+    if (
+      newProfiles.length > 0 ||
+      validFolders.some((f, i) => f.profiles.length !== profileOrg.folders[i]?.profiles.length) ||
+      validUngrouped.length !== profileOrg.ungrouped.length
+    ) {
+      set({ profileOrg: newOrg });
+      localStorage.setItem(PROFILE_ORG_KEY, JSON.stringify(newOrg));
+    }
+  },
 
   // Async actions
   loadProfiles: async () => {

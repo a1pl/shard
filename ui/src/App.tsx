@@ -308,6 +308,25 @@ function App() {
     });
   }, [setConfirmState, runAction, loadAccounts]);
 
+  const handleDeleteProfile = useCallback((id: string) => {
+    setConfirmState({
+      title: `Delete ${id}?`,
+      message: "This will permanently delete the profile and its settings.",
+      confirmLabel: "Delete",
+      tone: "danger",
+      onConfirm: async () => {
+        setConfirmState(null);
+        await runAction(async () => {
+          await invoke("delete_profile_cmd", { id });
+          await loadProfiles();
+          if (selectedProfileId === id) {
+            setSelectedProfileId(null);
+          }
+        });
+      },
+    });
+  }, [setConfirmState, runAction, loadProfiles, selectedProfileId, setSelectedProfileId]);
+
   const handleSaveConfig = useCallback(async () => {
     const { config } = useAppStore.getState();
     await runAction(async () => {
@@ -362,6 +381,7 @@ function App() {
             onCloneProfile={() => setActiveModal("clone")}
             onDiffProfiles={() => setActiveModal("diff")}
             onAddAccount={() => setActiveModal("device-code")}
+            onDeleteProfile={handleDeleteProfile}
           />
 
           <main className="main-content">

@@ -173,6 +173,29 @@ pub fn clone_profile(paths: &Paths, src: &str, dst: &str) -> Result<Profile> {
     Ok(profile)
 }
 
+pub fn delete_profile(paths: &Paths, id: &str) -> Result<()> {
+    let profile_dir = paths.profiles.join(id);
+    if !profile_dir.exists() {
+        bail!("profile not found: {id}");
+    }
+
+    fs::remove_dir_all(&profile_dir)
+        .with_context(|| format!("failed to delete profile directory: {}", profile_dir.display()))?;
+
+    // Also remove the instance directory if it exists
+    let instance_dir = paths.instances.join(id);
+    if instance_dir.exists() {
+        fs::remove_dir_all(&instance_dir).with_context(|| {
+            format!(
+                "failed to delete instance directory: {}",
+                instance_dir.display()
+            )
+        })?;
+    }
+
+    Ok(())
+}
+
 fn upsert_content(list: &mut Vec<ContentRef>, new_item: ContentRef) -> bool {
     if list.iter().any(|m| m.hash == new_item.hash) {
         return false;

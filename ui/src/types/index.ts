@@ -101,6 +101,19 @@ export type ModalType =
 
 export type SidebarView = "profiles" | "accounts" | "settings" | "store" | "logs";
 
+// Profile folder organization (UI-only, stored in localStorage)
+export type ProfileFolder = {
+  id: string;
+  name: string;
+  profiles: string[]; // profile IDs in this folder
+  collapsed: boolean;
+};
+
+export type ProfileOrganization = {
+  folders: ProfileFolder[];
+  ungrouped: string[]; // profile IDs not in any folder
+};
+
 // Skin/Cape types
 export type Skin = {
   id: string;
