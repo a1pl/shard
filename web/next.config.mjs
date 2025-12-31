@@ -14,6 +14,6 @@ export default withNextra({
     optimizeCss: false,
   },
   images: {
-    unoptimized: true,
+    formats: ["image/avif", "image/webp"],
   },
 });
