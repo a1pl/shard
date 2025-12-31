@@ -1,131 +1,182 @@
-# shard
+<p align="center">
+  <img src="logo.png" alt="Shard Launcher" width="128" height="128">
+</p>
 
-A minimal, clean, CLI-first Minecraft launcher focused on stability, reproducibility, and low duplication.
+<h1 align="center">Shard</h1>
+
+<p align="center">
+  <strong>A minimal, content-addressed Minecraft launcher</strong><br>
+  <em>CLI-first. Reproducible. Zero duplication.</em>
+</p>
+
+<p align="center">
+  <a href="#features">Features</a> •
+  <a href="#installation">Installation</a> •
+  <a href="#quick-start">Quick Start</a> •
+  <a href="#philosophy">Philosophy</a> •
+  <a href="#commands">Commands</a>
+</p>
+
+---
+
+## What is Shard?
+
+Shard is a Minecraft launcher that treats your game setup like code: **declarative**, **reproducible**, and **efficient**. Instead of copying mod files everywhere, Shard stores content once and references it by hash — like Git for your Minecraft mods.
+
+- **One mod file, infinite profiles** — mods are stored once, shared across all profiles
+- **Profiles are just JSON** — version control your setups, share them, diff them
+- **Works offline** — no launcher account required, no telemetry, your data stays local
+- **Modrinth & CurseForge** — search, browse, and install from both platforms
+- **Fabric & Forge** — loader support with automatic version resolution
+
+## Features
+
+| Feature | Description |
+|---------|-------------|
+| **Content-Addressed Store** | Mods, resourcepacks, and shaderpacks stored by SHA-256 hash. No duplicates, ever. |
+| **Declarative Profiles** | JSON manifests that define exactly what goes into each instance. |
+| **Multi-Account** | Multiple Microsoft accounts with secure token storage. |
+| **Mod Platforms** | Native Modrinth and CurseForge integration for search and install. |
+| **Templates** | Create profiles from reusable templates (Fabric, Forge, vanilla). |
+| **Desktop UI** | Clean Tauri-based GUI for those who prefer clicking over typing. |
+
+## Installation
+
+### From Source
+
+```bash
+# Clone and build
+git clone https://github.com/Th0rgal/shard.git
+cd shard
+cargo build --release
+
+# Run CLI
+./target/release/shard --help
+
+# Run Desktop UI
+cd ui && cargo tauri build --release
+```
+
+## Quick Start
+
+```bash
+# Add your Microsoft account
+shard account add
+
+# Create a Fabric 1.21.4 profile
+shard profile create my-profile --mc 1.21.4 --loader fabric
+
+# Add a mod from Modrinth
+shard mod add my-profile sodium
+
+# Launch
+shard launch my-profile
+```
 
 ## Philosophy
 
-- **Single source of truth**: profiles are declarative manifests; instances are derived artifacts.
-- **Deduplication first**: mods and packs live in a content-addressed store (SHA-256); profiles only reference hashes.
-- **Stable + boring**: plain JSON on disk, predictable layout, no magic state.
-- **Replaceable parts**: authentication, Minecraft data, and profile management are isolated modules.
-- **CLI-first**: everything is designed to be scripted and composed.
+Shard is built on five principles:
 
-## Architecture (high level)
+1. **Single source of truth** — Profiles are declarative manifests. Instances are derived artifacts that can be regenerated anytime.
 
-- **Profiles** (`profiles/<id>/profile.json`)
-  - The manifest for a version + mod/pack selection + runtime flags.
-- **Stores** (`store/*/sha256/`)
-  - Content-addressed blobs for mods, resourcepacks, shaderpacks.
-- **Instances** (`instances/<id>/`)
-  - Launchable game directories (symlinked mods/packs + overrides).
-- **Minecraft data** (`minecraft/`)
-  - Downloaded versions, libraries, assets, and natives.
-- **Accounts** (`accounts.json`)
-  - Multiple Microsoft accounts, with refresh + Minecraft access tokens.
+2. **Deduplication first** — Content lives in a SHA-256 addressed store. Install the same mod in 10 profiles? It's stored once.
 
-### Launch flow
+3. **Stable and boring** — Plain JSON on disk. Predictable directory layout. No hidden state or magic sync.
 
-1. Read profile manifest.
-2. Resolve Minecraft version (vanilla or Fabric loader).
-3. Download version JSON + client jar (cached).
-4. Download libraries + extract natives.
-5. Download asset index + assets.
-6. Materialize instance (mods/packs + overrides).
-7. Build JVM + game args from version JSON.
-8. Launch Java process.
+4. **Replaceable parts** — Authentication, Minecraft data, and profiles are isolated modules. Swap or extend without breaking everything.
 
-## Data layout
+5. **CLI-first** — Every feature works from the command line. Script it, automate it, pipe it.
+
+## Commands
+
+### Profiles
+```bash
+shard list                                    # List all profiles
+shard profile create <id> --mc <version>      # Create profile
+shard profile create <id> --mc 1.21.4 --loader fabric
+shard profile clone <src> <dst>               # Clone profile
+shard profile show <id>                       # Show profile details
+shard profile diff <a> <b>                    # Compare profiles
+```
+
+### Content
+```bash
+shard mod add <profile> <file|url|slug>       # Add mod
+shard mod remove <profile> <name|hash>        # Remove mod
+shard mod list <profile>                      # List mods
+
+shard resourcepack add <profile> <input>      # Add resourcepack
+shard shaderpack add <profile> <input>        # Add shaderpack
+```
+
+### Store
+```bash
+shard store search <query>                    # Search Modrinth + CurseForge
+shard store search <query> --platform modrinth
+shard store info <platform> <project-id>      # Project details
+shard store install <profile> <platform> <project-id>
+```
+
+### Accounts
+```bash
+shard account add                             # Add Microsoft account
+shard account list                            # List accounts
+shard account use <username>                  # Set active account
+shard account remove <username>               # Remove account
+```
+
+### Launch
+```bash
+shard launch <profile>                        # Launch game
+shard launch <profile> --account <username>   # Launch with specific account
+shard launch <profile> --prepare-only         # Prepare without launching
+```
+
+## Data Layout
 
 ```
 ~/.shard/
-  store/
-    mods/sha256/<hash>
-    resourcepacks/sha256/<hash>
-    shaderpacks/sha256/<hash>
-  profiles/
-    <profile-id>/profile.json
-    <profile-id>/overrides/
-  instances/
-    <profile-id>/
-  minecraft/
-    versions/<version>/<version>.json
-    versions/<version>/<version>.jar
-    libraries/
-    assets/objects/<hash>
-    assets/indexes/<index>.json
-  caches/
-    downloads/
-    manifests/
-  accounts.json
-  config.json
-  logs/
+├── store/                    # Content-addressed storage
+│   ├── mods/sha256/
+│   ├── resourcepacks/sha256/
+│   └── shaderpacks/sha256/
+├── profiles/                 # Profile manifests
+│   └── <id>/profile.json
+├── instances/                # Materialized game directories
+├── minecraft/                # Versions, libraries, assets
+├── accounts.json             # Account tokens (keep private)
+└── config.json               # Launcher settings
 ```
 
-## Microsoft account setup
+## Configuration
 
-Shard uses Microsoft device-code flow and requires a **Microsoft OAuth client id**.
-Some Azure app registrations also require a **client secret** (confidential client); shard will use it if provided.
+Shard uses Microsoft OAuth for authentication. Set your client credentials via environment or config:
 
-Set it via env or config (supports `.env` via dotenv):
-
-```
-MICROSOFT_CLIENT_ID="your-client-id"
-MICROSOFT_CLIENT_SECRET="your-client-secret"
-
+```bash
+# Environment variables
 export SHARD_MS_CLIENT_ID="your-client-id"
-export SHARD_MS_CLIENT_SECRET="your-client-secret"
+export SHARD_MS_CLIENT_SECRET="your-client-secret"  # if required
 
-# or
+# Or via CLI
 shard config set-client-id <your-client-id>
-shard config set-client-secret <your-client-secret>
 ```
 
-Then add an account:
-
-```
-shard account add
-```
-
-## Commands (MVP)
-
-```
-shard list
-shard profile create <id> --mc <version> [--loader fabric@<loader-version>]
-shard profile clone <src> <dst>
-shard profile show <id>
-shard profile diff <a> <b>
-
-shard mod add <profile> <file|url>
-shard mod remove <profile> <name|hash>
-shard mod list <profile>
-
-shard resourcepack add <profile> <file|url>
-shard resourcepack remove <profile> <name|hash>
-shard resourcepack list <profile>
-
-shard shaderpack add <profile> <file|url>
-shard shaderpack remove <profile> <name|hash>
-shard shaderpack list <profile>
-
-shard modpack import <path> [--id <profile-id>]
-
-shard account add
-shard account list
-shard account use <uuid|username>
-shard account remove <uuid|username>
-
-shard launch <profile> [--account <uuid|username>] [--prepare-only]
+For CurseForge API access:
+```bash
+export SHARD_CURSEFORGE_API_KEY="your-api-key"
 ```
 
-## Notes
+## License
 
-- **Fabric loader**: specify `--loader fabric@<version>` on profile creation. The Fabric profile JSON is fetched from Fabric meta.
-- **Overrides**: `profiles/<id>/overrides/` is merged into the instance (without overwriting existing files). Delete instance files to re-apply overrides.
-- **Tokens**: account tokens are stored locally in `accounts.json` for convenience. Protect your `~/.shard` directory.
+MIT
 
-## Next ideas (not yet)
+---
 
-- Forge/Quilt loader support
-- Garbage collection for unreferenced store blobs
-- Lockfiles for strict dependency pinning
-- GUI layer over the same profile/store model
+<p align="center">
+  <sub>Built by <a href="https://github.com/Th0rgal">@Th0rgal</a></sub><br>
+  <sub>
+    <a href="https://github.com/Th0rgal/horus-nix-home">horus-nix-home</a> •
+    <a href="https://github.com/Th0rgal/binance.py">binance.py</a> •
+    <a href="https://github.com/Th0rgal/hackedserver">HackedServer</a>
+  </sub>
+</p>
