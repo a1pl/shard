@@ -79,7 +79,7 @@ export function LogsView() {
         }]);
       } else {
         const entries = await invoke<LogEntry[]>("read_logs_cmd", {
-          profile_id: selectedProfileId,
+          profileId: selectedProfileId,
           file: file.name,
           lines: null,
         });
@@ -120,7 +120,7 @@ export function LogsView() {
 
         try {
           const entries = await invoke<LogEntry[]>("read_logs_cmd", {
-            profile_id: selectedProfileId,
+            profileId: selectedProfileId,
             file: null,
             lines: MAX_LOG_ENTRIES,
           });
@@ -137,7 +137,7 @@ export function LogsView() {
           if (now - lastEventAtRef.current < 1500) return;
           try {
             const entries = await invoke<LogEntry[]>("read_logs_cmd", {
-              profile_id: selectedProfileId,
+              profileId: selectedProfileId,
               file: null,
               lines: MAX_LOG_ENTRIES,
             });
