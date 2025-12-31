@@ -140,6 +140,27 @@ aside .nextra-menu-title {
   font-weight: 500;
 }
 
+/* Sidebar section separators (Getting Started, Concepts, Development) */
+aside li:not(:has(a)):not(:has(button)),
+.nextra-sidebar-container li:not(:has(a)):not(:has(button)),
+aside ul > li:only-child:not(:has(a)),
+[class*="sidebar"] li:not(:has(a)):not(:has(button)) {
+  color: rgb(232, 168, 85) !important;
+  font-size: 0.6875rem !important;
+  font-weight: 600 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.08em !important;
+  padding: 1rem 0.75rem 0.5rem !important;
+  margin-top: 0.5rem !important;
+  opacity: 1 !important;
+}
+
+/* First separator doesn't need top margin */
+aside ul > li:first-child:not(:has(a)):not(:has(button)) {
+  margin-top: 0 !important;
+  padding-top: 0.5rem !important;
+}
+
 /* ============================================
    CODE BLOCKS
    ============================================ */
