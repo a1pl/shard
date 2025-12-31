@@ -89,6 +89,7 @@ interface AppState {
   moveProfileToFolder: (profileId: string, folderId: string | null) => void;
   reorderProfileInFolder: (profileId: string, folderId: string | null, targetIndex: number) => void;
   setFavoriteProfile: (profileId: string | null) => void;
+  renameProfileInOrganization: (oldId: string, newId: string) => void;
   loadProfileOrganization: () => void;
   syncProfileOrganization: () => void;
 
@@ -258,6 +259,27 @@ export const useAppStore = create<AppState>((set, get) => ({
   setFavoriteProfile: (profileId: string | null) => {
     const { profileOrg } = get();
     const newOrg = { ...profileOrg, favoriteProfile: profileId };
+    set({ profileOrg: newOrg });
+    localStorage.setItem(PROFILE_ORG_KEY, JSON.stringify(newOrg));
+  },
+
+  renameProfileInOrganization: (oldId: string, newId: string) => {
+    const { profileOrg } = get();
+    // Update profile ID in folders
+    const newFolders = profileOrg.folders.map((f) => ({
+      ...f,
+      profiles: f.profiles.map((p) => (p === oldId ? newId : p)),
+    }));
+    // Update profile ID in ungrouped
+    const newUngrouped = profileOrg.ungrouped.map((p) => (p === oldId ? newId : p));
+    // Update favorite if it was the renamed profile
+    const newFavorite = profileOrg.favoriteProfile === oldId ? newId : profileOrg.favoriteProfile;
+
+    const newOrg = {
+      folders: newFolders,
+      ungrouped: newUngrouped,
+      favoriteProfile: newFavorite,
+    };
     set({ profileOrg: newOrg });
     localStorage.setItem(PROFILE_ORG_KEY, JSON.stringify(newOrg));
   },

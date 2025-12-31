@@ -1189,11 +1189,12 @@ pub fn fetch_forge_versions_cmd(mc_version: Option<String>) -> Result<Vec<String
 
     // Filter versions based on MC version if provided
     let versions: Vec<String> = if let Some(mc) = mc_version {
-        // Look for versions matching this MC version
+        // Look for versions matching this MC version exactly
+        // Key format: "1.20.1-recommended" or "1.20.1-latest"
+        let prefix = format!("{}-", mc);
         promos.promos.iter()
-            .filter(|(key, _)| key.starts_with(&mc))
+            .filter(|(key, _)| key.starts_with(&prefix))
             .map(|(_, version)| {
-                // Key format: "1.20.1-recommended" or "1.20.1-latest"
                 // Value is the forge version number
                 format!("{}-{}", mc, version)
             })

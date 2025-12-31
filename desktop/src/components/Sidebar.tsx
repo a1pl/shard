@@ -295,6 +295,7 @@ export function Sidebar({
     toggleFolderCollapsed,
     moveProfileToFolder,
     setFavoriteProfile,
+    renameProfileInOrganization,
     loadProfileOrganization,
     syncProfileOrganization,
     loadProfiles,
@@ -408,6 +409,8 @@ export function Sidebar({
     if (newName && newName !== renamingProfileId) {
       try {
         await invoke("rename_profile_cmd", { id: renamingProfileId, new_id: newName });
+        // Update organization before reloading (preserves folder membership and favorite)
+        renameProfileInOrganization(renamingProfileId, newName);
         // Update selection if we renamed the selected profile
         if (selectedProfileId === renamingProfileId) {
           setSelectedProfileId(newName);
