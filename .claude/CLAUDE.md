@@ -4,13 +4,15 @@
 If you update this file, also update `.codex/CODEX.md` and `.cursor/rules/context.mdx` to keep contexts aligned.
 
 ## Overview
-Shard is a minimal, clean, CLI-first Minecraft launcher focused on stability, reproducibility, and low duplication. The core library and CLI are in Rust; the optional desktop UI is built with Tauri + React.
+Shard is a minimal, clean, CLI-first Minecraft launcher focused on stability, reproducibility, and low duplication.
 
 | Directory | Tech Stack | Purpose |
 |-----------|------------|---------|
-| `/` (root) | Rust | Core library + CLI (profiles, store, downloads, launching) |
-| `ui/` | Tauri 2, React, TypeScript, Vite | Desktop application UI |
-| `ui/src-tauri/` | Rust | Tauri backend (bridge to core library) |
+| `launcher/` | Rust | Core library + CLI (profiles, store, downloads, launching) |
+| `desktop/` | Tauri 2, React, TypeScript, Vite | Desktop application UI |
+| `desktop/src-tauri/` | Rust | Tauri backend (bridge to core library) |
+| `web/` | Next.js 16, React 19, Nextra | Website + documentation |
+| `companion/` | (placeholder) | Future companion mode |
 
 ## Philosophy
 - **Single source of truth**: profiles are declarative manifests; instances are derived artifacts.
@@ -28,44 +30,52 @@ Shard is a minimal, clean, CLI-first Minecraft launcher focused on stability, re
 - **Minecraft data** (`minecraft/`): versions, libraries, assets, natives.
 - **Accounts** (`accounts.json`): multiple Microsoft accounts with refresh + access tokens.
 
-## Code map (Rust)
-- `src/lib.rs`: core library entry point, re-exports all modules.
-- `src/main.rs`: CLI entry point with subcommands.
-- `src/profile.rs`: profile management and serialization.
-- `src/template.rs`: profile templates for quick setup.
-- `src/store.rs`: content-addressed store operations.
-- `src/content_store.rs`: unified content store abstraction.
-- `src/library.rs`: global library/content management.
-- `src/instance.rs`: instance materialization from profiles.
-- `src/minecraft.rs`: version/library/asset downloads.
-- `src/modrinth.rs`: Modrinth API client for mod search/install.
-- `src/curseforge.rs`: CurseForge API client for mod search/install.
-- `src/ops.rs`: higher-level operations (download, install, launch).
-- `src/auth.rs`: Microsoft OAuth device code flow.
-- `src/accounts.rs`: account storage + selection.
-- `src/skin.rs`: Minecraft skin fetching and upload.
-- `src/java.rs`: Java runtime detection and management.
-- `src/config.rs`: global configuration handling.
-- `src/paths.rs`: data path helpers.
-- `src/logs.rs`: logging infrastructure.
-- `src/updates.rs`: update checking functionality.
-- `src/util.rs`: shared helpers.
+## Code map (Rust - launcher/)
+- `launcher/src/lib.rs`: core library entry point, re-exports all modules.
+- `launcher/src/main.rs`: CLI entry point with subcommands.
+- `launcher/src/profile.rs`: profile management and serialization.
+- `launcher/src/template.rs`: profile templates for quick setup.
+- `launcher/src/store.rs`: content-addressed store operations.
+- `launcher/src/content_store.rs`: unified content store abstraction.
+- `launcher/src/library.rs`: global library/content management.
+- `launcher/src/instance.rs`: instance materialization from profiles.
+- `launcher/src/minecraft.rs`: version/library/asset downloads.
+- `launcher/src/modrinth.rs`: Modrinth API client for mod search/install.
+- `launcher/src/curseforge.rs`: CurseForge API client for mod search/install.
+- `launcher/src/ops.rs`: higher-level operations (download, install, launch).
+- `launcher/src/auth.rs`: Microsoft OAuth device code flow.
+- `launcher/src/accounts.rs`: account storage + selection.
+- `launcher/src/skin.rs`: Minecraft skin fetching and upload.
+- `launcher/src/java.rs`: Java runtime detection and management.
+- `launcher/src/config.rs`: global configuration handling.
+- `launcher/src/paths.rs`: data path helpers.
+- `launcher/src/logs.rs`: logging infrastructure.
+- `launcher/src/updates.rs`: update checking functionality.
+- `launcher/src/util.rs`: shared helpers.
 
-## Code map (UI)
-- `ui/src/App.tsx`: main application component, routing, modal management.
-- `ui/src/store.ts`: Zustand state management.
-- `ui/src/styles.css`: design tokens, theme variables, component styles.
-- `ui/src/components/Sidebar.tsx`: navigation sidebar with profile selector, drag-and-drop folders.
-- `ui/src/components/ProfileView.tsx`: profile details, content management, launch controls.
-- `ui/src/components/StoreView.tsx`: Modrinth/CurseForge mod browser with search and install.
-- `ui/src/components/LibraryView.tsx`: global content library browser.
-- `ui/src/components/AccountView.tsx`: account details and skin management.
-- `ui/src/components/AccountsView.tsx`: account list and switching.
-- `ui/src/components/LogsView.tsx`: live game log viewer.
-- `ui/src/components/SettingsView.tsx`: application settings.
-- `ui/src/components/SkinViewer.tsx`: 3D Minecraft skin renderer.
-- `ui/src/components/PlatformIcon.tsx`: Modrinth/CurseForge/Local platform icons.
-- `ui/src/components/modals/`: modal dialogs for various actions.
+## Code map (Desktop - desktop/)
+- `desktop/src/App.tsx`: main application component, routing, modal management.
+- `desktop/src/store/index.ts`: Zustand state management.
+- `desktop/src/styles.css`: design tokens, theme variables, component styles.
+- `desktop/src/components/Sidebar.tsx`: navigation sidebar with profile selector, drag-and-drop folders.
+- `desktop/src/components/ProfileView.tsx`: profile details, content management, launch controls.
+- `desktop/src/components/StoreView.tsx`: Modrinth/CurseForge mod browser with search and install.
+- `desktop/src/components/LibraryView.tsx`: global content library browser.
+- `desktop/src/components/AccountView.tsx`: account details and skin management.
+- `desktop/src/components/AccountsView.tsx`: account list and switching.
+- `desktop/src/components/LogsView.tsx`: live game log viewer.
+- `desktop/src/components/SettingsView.tsx`: application settings.
+- `desktop/src/components/SkinViewer.tsx`: 3D Minecraft skin renderer.
+- `desktop/src/components/PlatformIcon.tsx`: Modrinth/CurseForge/Local platform icons.
+- `desktop/src/components/modals/`: modal dialogs for various actions.
+
+## Code map (Web - web/)
+- `web/app/page.tsx`: homepage with launcher preview hero.
+- `web/app/layout.tsx`: root layout with theme provider.
+- `web/app/docs/[[...mdxPath]]/page.tsx`: Nextra documentation routing.
+- `web/content/`: MDX documentation files.
+- `web/components/launcher-hero/`: Interactive launcher preview component.
+- `web/components/theme-provider.tsx`: Next-themes provider.
 
 ## Launch flow
 1. Read profile manifest.
@@ -109,6 +119,8 @@ Shard is a minimal, clean, CLI-first Minecraft launcher focused on stability, re
 
 ### Core Library (CLI)
 ```bash
+cd launcher
+
 # Development (fast, debug symbols)
 cargo build
 cargo run -- <args>
@@ -120,9 +132,9 @@ cargo build --profile dev-release
 cargo build --release
 ```
 
-### UI Application
+### Desktop Application
 ```bash
-cd ui
+cd desktop
 
 # Install frontend dependencies
 bun install
@@ -135,6 +147,23 @@ cargo tauri build --profile dev-release
 
 # Production build (full optimization)
 cargo tauri build --release
+```
+
+### Website
+```bash
+cd web
+
+# Install dependencies
+bun install
+
+# Development mode
+bun run dev
+
+# Build for production
+bun run build
+
+# Run tests
+bun run test
 ```
 
 ## Build Profiles
@@ -153,36 +182,49 @@ cargo tauri build --release
 ## Environment
 
 - **Config location**: `~/.shard/` (profiles, store, caches)
-- **UI dev server**: `http://localhost:1420`
+- **Desktop dev server**: `http://localhost:1420`
+- **Web dev server**: `http://localhost:3000`
 
 ## UI Design
 
-- Design tokens and theme variables live in `ui/src/styles.css` (warm dark palette, Geist fonts).
+### Desktop
+- Design tokens and theme variables live in `desktop/src/styles.css` (warm dark palette, Geist fonts).
 - Uses custom CSS with CSS variables, not Tailwind.
 - Glassmorphism with `backdrop-filter: blur()` on elevated surfaces.
-- Accent colors: `--accent-primary` (cyan blue), `--accent-secondary` (warm amber).
+- Accent colors: `--accent-primary` (warm amber #e8a855).
 - Border-radius scale: 4px (tiny), 6px (small), 8px (medium), 10px (standard), 12px (large containers).
+
+### Web
+- Design tokens in `web/app/globals.css` (warm dark palette matching desktop).
+- Uses Tailwind CSS v4.
+- Same warm amber accent colors as desktop.
 
 ## AI Agent Guidelines
 
-1. **Build commands**: Always use `cargo tauri dev` for UI development, not `cargo build`.
+1. **Build commands**: Always use `cargo tauri dev` for desktop development, not `cargo build`.
 2. **Profile usage**: Default to `dev` profile for iteration; use `dev-release` for quick test builds; `release` for production.
-3. **Avoid generated dirs**: `**/target/`, `**/node_modules/`, `**/dist/`.
-4. **Frontend changes**: Edit `ui/src/` files; Tauri backend in `ui/src-tauri/`.
-5. **Core library**: Edit root `src/` files; shared between CLI and UI.
-6. **CSS**: Use CSS variables from `styles.css`, maintain consistent border-radius and spacing.
-7. **Keep contexts aligned**: Update `.codex/CODEX.md` and `.cursor/rules/context.mdx` when this file changes.
+3. **Avoid generated dirs**: `**/target/`, `**/node_modules/`, `**/dist/`, `**/.next/`.
+4. **Desktop changes**: Edit `desktop/src/` files; Tauri backend in `desktop/src-tauri/`.
+5. **Core library**: Edit `launcher/src/` files; shared between CLI and desktop.
+6. **Website changes**: Edit `web/` files; docs content in `web/content/`.
+7. **CSS**: Use CSS variables, maintain consistent border-radius and spacing.
+8. **Keep contexts aligned**: Update `.codex/CODEX.md` and `.cursor/rules/context.mdx` when this file changes.
 
 ## Testing
 
 ```bash
 # Core library
-cargo check
-cargo test
+cd launcher && cargo check && cargo test
 
-# UI (check Rust compilation)
-cd ui && cargo tauri dev
+# Desktop (check Rust compilation)
+cd desktop && cargo tauri dev
 
-# Frontend only
-cd ui && bun run dev
+# Desktop frontend only
+cd desktop && bun run dev
+
+# Website
+cd web && bun run dev
+
+# Website tests (Playwright)
+cd web && bun run test
 ```

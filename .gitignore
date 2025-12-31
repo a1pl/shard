@@ -6,7 +6,20 @@ chorus
 logs/
 crash-reports/
 fabricloader.log
-ui/node_modules/
-ui/dist/
-ui/src-tauri/target/
+
+# Desktop app
+desktop/node_modules/
+desktop/dist/
+desktop/src-tauri/target/
+
+# Website
+web/node_modules/
+web/.next/
+web/out/
+web/test-results/
+web/playwright-report/
+
+# General
 .playwright-mcp
+*.log
+.DS_Store
