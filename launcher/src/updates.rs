@@ -252,8 +252,6 @@ fn check_content_updates(
     let loader = profile.loader.as_ref().map(|l| l.loader_type.as_str());
 
     for content in content_list {
-        result.checked += 1;
-
         // Skip pinned content
         if content.pinned {
             result.skipped += 1;
@@ -279,6 +277,9 @@ fn check_content_updates(
                 continue;
             }
         };
+
+        // Item will be checked - count it now
+        result.checked += 1;
 
         // Get the latest version for this MC version and loader
         let latest = match store.get_latest_version(
