@@ -276,8 +276,9 @@ function App() {
   }, [selectedProfileId, activeTab, setConfirmState, runAction, loadProfile]);
 
   const handleLaunch = useCallback(async () => {
-    // Prevent double-click race condition
-    if (launchStatus) return;
+    // Prevent double-click race condition - use getState() for synchronous check
+    // to avoid stale closure values between renders
+    if (useAppStore.getState().launchStatus) return;
 
     const activeAccount = getActiveAccount();
     if (!selectedProfileId || !activeAccount) {
@@ -298,7 +299,7 @@ function App() {
       notify("Launch failed", String(err));
       setLaunchStatus(null);
     }
-  }, [selectedProfileId, getActiveAccount, notify, setLaunchStatus, launchStatus]);
+  }, [selectedProfileId, getActiveAccount, notify, setLaunchStatus]);
 
   const handleOpenInstance = useCallback(async () => {
     if (!selectedProfileId) return;
