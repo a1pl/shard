@@ -1139,7 +1139,7 @@ pub fn fetch_neoforge_versions_cmd(mc_version: Option<String>) -> Result<Vec<Str
     // NeoForge API returns versions for a specific MC version
     // For MC 1.20.1+, use the NeoForge API
     let url = if let Some(mc) = mc_version {
-        format!("https://maven.neoforged.net/api/maven/versions/releases/net/neoforged/neoforge?filter={}.", mc.replace("1.", ""))
+        format!("https://maven.neoforged.net/api/maven/versions/releases/net/neoforged/neoforge?filter={}.", mc.replacen("1.", "", 1))
     } else {
         "https://maven.neoforged.net/api/maven/versions/releases/net/neoforged/neoforge".to_string()
     };

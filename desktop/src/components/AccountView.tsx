@@ -202,12 +202,10 @@ export function AccountView({ onAddAccount }: AccountViewProps) {
         id: activeAccount.uuid,
         url: skinUrl.trim(),
         variant: skinVariant,
-        saveToLibrary: true,
       });
       await loadAccountInfo(activeAccount.uuid);
-      await loadSkinLibrary(librarySearch); // Refresh library
       setSkinUrl("");
-      notify("Skin updated and added to library");
+      notify("Skin updated");
     } catch (err) {
       setError(String(err));
     } finally {

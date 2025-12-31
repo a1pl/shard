@@ -112,7 +112,7 @@ export function PurgeStorageModal({ open, onClose, onPurged }: PurgeStorageModal
         (key) => CATEGORIES.find((c) => c.key === key)!.typeString
       );
       const result = await invoke<PurgeResult>("purge_unused_items_cmd", {
-        contentTypes,
+        content_types: contentTypes,
       });
       onPurged(result);
       onClose();

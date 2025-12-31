@@ -246,13 +246,16 @@ function App() {
       return;
     }
     setLaunchStatus({ stage: "queued" });
-    await runAction(async () => {
+    try {
       await invoke("launch_profile_cmd", {
         profileId: selectedProfileId,
         accountId: activeAccount.uuid,
       });
-    });
-  }, [selectedProfileId, getActiveAccount, notify, runAction, setLaunchStatus]);
+    } catch (err) {
+      notify("Launch failed", String(err));
+      setLaunchStatus(null);
+    }
+  }, [selectedProfileId, getActiveAccount, notify, setLaunchStatus]);
 
   const handleOpenInstance = useCallback(async () => {
     if (!selectedProfileId) return;

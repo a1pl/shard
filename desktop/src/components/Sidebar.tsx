@@ -407,7 +407,7 @@ export function Sidebar({
     const newName = renamingProfileName.trim();
     if (newName && newName !== renamingProfileId) {
       try {
-        await invoke("rename_profile_cmd", { id: renamingProfileId, newId: newName });
+        await invoke("rename_profile_cmd", { id: renamingProfileId, new_id: newName });
         // Update selection if we renamed the selected profile
         if (selectedProfileId === renamingProfileId) {
           setSelectedProfileId(newName);
