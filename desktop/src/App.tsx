@@ -142,6 +142,11 @@ function App() {
     if (launchStatus.stage === "done") {
       clearTimerRef.current = setTimeout(() => setLaunchStatus(null), 2500);
     }
+
+    // Clear error status after displaying notification, so user can try again
+    if (launchStatus.stage === "error") {
+      clearTimerRef.current = setTimeout(() => setLaunchStatus(null), 3000);
+    }
   }, [launchStatus, setLaunchStatus]);
 
   useEffect(() => {
