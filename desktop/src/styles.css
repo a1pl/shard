@@ -2418,17 +2418,11 @@ a {
     background: rgba(255, 255, 255, 0.04);
     border: 1px solid var(--border-default);
     color: var(--text-primary);
-    box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.05),
-      inset 0 0 0 1px rgba(255, 255, 255, 0.02);
   }
 
   .btn-secondary:hover {
     background: rgba(255, 255, 255, 0.07);
     border-color: var(--border-strong);
-    box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.08),
-      inset 0 0 0 1px rgba(255, 255, 255, 0.03);
   }
 
   .btn-ghost {
@@ -2546,10 +2540,36 @@ a {
   max-width: 640px;
 }
 
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 20px;
+  position: relative;
+  z-index: 1;
+}
+
+.modal-header--titleless {
+  justify-content: flex-end;
+  margin-bottom: 12px;
+}
+
 .modal-title {
   font-size: 20px;
   font-weight: 600;
-  margin: 0 0 24px;
+  margin: 0;
+  color: var(--text-primary);
+}
+
+.modal-close {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+}
+
+.modal-close:hover {
+  background: rgba(255, 255, 255, 0.08);
   color: var(--text-primary);
 }
 
@@ -2564,10 +2584,11 @@ a {
    JSON VIEWER
    ============================================================================= */
 .json-viewer {
+  position: relative;
   background: rgba(0, 0, 0, 0.32);
   border: 1px solid var(--border-subtle);
   border-radius: 12px;
-  padding: 16px 18px;
+  padding: 18px 48px 16px 18px;
   font-size: 12px;
   font-family: var(--font-mono);
   line-height: 1.6;
@@ -2582,6 +2603,20 @@ a {
   display: block;
   white-space: pre;
   color: var(--text-secondary);
+}
+
+.json-copy-btn {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 28px;
+  height: 28px;
+}
+
+.json-copy-btn.copied {
+  color: var(--accent-success);
+  background: rgba(124, 207, 155, 0.16);
+  border-color: rgba(124, 207, 155, 0.3);
 }
 
 .json-token-key {
