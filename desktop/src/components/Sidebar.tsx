@@ -15,6 +15,52 @@ import {
 import { useAppStore } from "../store";
 import type { ProfileFolder } from "../types";
 
+// Render a skin head from the skin texture using canvas
+function SkinHead({ skinUrl, size = 32 }: { skinUrl: string; size?: number }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    if (!canvasRef.current || !skinUrl) return;
+
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    setLoaded(false);
+
+    const img = new Image();
+    // Only set crossOrigin for http(s) URLs, not for asset:// protocol
+    if (skinUrl.startsWith("http")) {
+      img.crossOrigin = "anonymous";
+    }
+    img.onload = () => {
+      ctx.clearRect(0, 0, size, size);
+      ctx.imageSmoothingEnabled = false;
+      // Minecraft skin head is at (8, 8) with size 8x8 pixels
+      ctx.drawImage(img, 8, 8, 8, 8, 0, 0, size, size);
+      // Draw the overlay layer (at 40, 8)
+      ctx.drawImage(img, 40, 8, 8, 8, 0, 0, size, size);
+      setLoaded(true);
+    };
+    img.onerror = () => {
+      ctx.fillStyle = "#333";
+      ctx.fillRect(0, 0, size, size);
+    };
+    img.src = skinUrl;
+  }, [skinUrl, size]);
+
+  return (
+    <canvas
+      ref={canvasRef}
+      width={size}
+      height={size}
+      className="account-badge-avatar"
+      style={{ imageRendering: "pixelated", borderRadius: 6, opacity: loaded ? 1 : 0.5 }}
+    />
+  );
+}
+
 // Draggable profile item component
 function DraggableProfileItem({
   id,
@@ -189,6 +235,7 @@ export function Sidebar({
     sidebarView,
     setSidebarView,
     getActiveAccount,
+    activeAccountSkinUrl,
     profileOrg,
     contextMenuTarget,
     setContextMenuTarget,
@@ -568,18 +615,22 @@ export function Sidebar({
             onClick={() => setSidebarView("accounts")}
             data-tauri-drag-region="false"
           >
-            <img
-              className="account-badge-avatar"
-              src={`https://mc-heads.net/avatar/${activeAccount.uuid.replace(/-/g, "")}/64`}
-              alt={activeAccount.username}
-              onError={(e) => {
-                const target = e.currentTarget;
-                target.style.display = "none";
-                const fallback = target.nextElementSibling as HTMLElement;
-                if (fallback) fallback.style.display = "flex";
-              }}
-            />
-            <div className="account-badge-avatar-fallback" style={{ display: "none" }}>
+            {activeAccountSkinUrl ? (
+              <SkinHead skinUrl={activeAccountSkinUrl} size={32} />
+            ) : (
+              <img
+                className="account-badge-avatar"
+                src={`https://mc-heads.net/avatar/${activeAccount.uuid.replace(/-/g, "")}/64`}
+                alt={activeAccount.username}
+                onError={(e) => {
+                  const target = e.currentTarget;
+                  target.style.display = "none";
+                  const fallback = target.nextElementSibling as HTMLElement;
+                  if (fallback) fallback.style.display = "flex";
+                }}
+              />
+            )}
+            <div className="account-badge-avatar-fallback" style={{ display: activeAccountSkinUrl ? "none" : "none" }}>
               {activeAccount.username.charAt(0).toUpperCase()}
             </div>
             <div className="account-badge-info">

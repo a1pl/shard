@@ -4,6 +4,7 @@ import { convertFileSrc } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { useAppStore } from "../store";
 import { SkinViewer, type ModelVariant } from "./SkinViewer";
+import { SkinHead } from "./SkinThumbnail";
 import { Field } from "./Field";
 import type { AccountInfo, Cape, Account, LibraryItem, LibraryFilter } from "../types";
 import { preloadCapeTextures } from "../lib/player-model";
@@ -18,7 +19,7 @@ interface AccountViewProps {
 }
 
 export function AccountView({ onAddAccount }: AccountViewProps) {
-  const { accounts, loadAccounts, notify, runAction, getActiveAccount } = useAppStore();
+  const { accounts, loadAccounts, notify, runAction, getActiveAccount, setActiveAccountSkinUrl } = useAppStore();
   const activeAccount = getActiveAccount();
 
   const [info, setInfo] = useState<AccountInfo | null>(null);
@@ -118,6 +119,9 @@ export function AccountView({ onAddAccount }: AccountViewProps) {
       if (activeSkin?.variant) {
         setSkinVariant(activeSkin.variant as ModelVariant);
       }
+      // Update global skin URL for sidebar
+      const skinUrl = activeSkin?.url || data.skin_url || null;
+      setActiveAccountSkinUrl(skinUrl);
       // Preload all cape textures for instant switching
       const capeUrls = data.profile?.capes?.map((c) => c.url).filter(Boolean) ?? [];
       if (capeUrls.length > 0) {
@@ -130,7 +134,7 @@ export function AccountView({ onAddAccount }: AccountViewProps) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [setActiveAccountSkinUrl]);
 
   // Load account info when active account changes
   useEffect(() => {
@@ -293,129 +297,50 @@ export function AccountView({ onAddAccount }: AccountViewProps) {
     return `https://mc-heads.net/avatar/${cleanUuid}/64`;
   };
 
-  // Render a skin head from the skin texture using canvas
-  const SkinHead = ({ skinUrl, size = 44, className }: { skinUrl: string; size?: number; className?: string }) => {
-    const canvasRef = useRef<HTMLCanvasElement>(null);
-
-    useEffect(() => {
-      if (!canvasRef.current || !skinUrl) return;
-
-      const canvas = canvasRef.current;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) return;
-
-      const img = new Image();
-      img.crossOrigin = "anonymous";
-      img.onload = () => {
-        // Clear canvas
-        ctx.clearRect(0, 0, size, size);
-
-        // Minecraft skin head is at (8, 8) with size 8x8 pixels
-        // Draw the base head layer
-        ctx.imageSmoothingEnabled = false;
-        ctx.drawImage(img, 8, 8, 8, 8, 0, 0, size, size);
-
-        // Draw the overlay layer (at 40, 8)
-        ctx.drawImage(img, 40, 8, 8, 8, 0, 0, size, size);
-      };
-      img.onerror = () => {
-        // On error, try to show a placeholder
-        ctx.fillStyle = "#333";
-        ctx.fillRect(0, 0, size, size);
-      };
-      img.src = skinUrl;
-    }, [skinUrl, size]);
-
-    return (
-      <canvas
-        ref={canvasRef}
-        width={size}
-        height={size}
-        className={className}
-        style={{ imageRendering: "pixelated", borderRadius: size > 40 ? 10 : 6 }}
-      />
-    );
-  };
-
-  // Simple static skin preview for library cards (more performant than 3D viewer)
-  const SkinPreview = ({ skinUrl, width = 60, height = 90 }: { skinUrl: string; width?: number; height?: number }) => {
+  // Cape preview - extracts the front portion of the cape texture
+  const CapePreview = ({ capeUrl, size = 32 }: { capeUrl: string; size?: number }) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const [loaded, setLoaded] = useState(false);
-    const [error, setError] = useState(false);
 
     useEffect(() => {
-      if (!canvasRef.current || !skinUrl) {
-        setError(true);
-        return;
-      }
+      if (!canvasRef.current || !capeUrl) return;
 
       const canvas = canvasRef.current;
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
 
       setLoaded(false);
-      setError(false);
 
       const img = new Image();
       img.crossOrigin = "anonymous";
       img.onload = () => {
-        ctx.clearRect(0, 0, width, height);
+        ctx.clearRect(0, 0, size, size);
         ctx.imageSmoothingEnabled = false;
 
-        // Scale to fit - skin preview showing front view
-        const scale = Math.min(width / 16, height / 32) * 0.85;
-        const offsetX = (width - 16 * scale) / 2;
-        const offsetY = (height - 32 * scale) / 2;
+        // Cape texture is 64x32 (or 22x17 for older capes)
+        // The front of the cape is at (1, 1) with size 10x16
+        // We'll extract a square from the center-top of the front
+        const srcX = 1;
+        const srcY = 1;
+        const srcSize = 10; // Width of front cape section
 
-        // Draw head (8x8 at position 8,8)
-        ctx.drawImage(img, 8, 8, 8, 8, offsetX + 4 * scale, offsetY, 8 * scale, 8 * scale);
-        // Draw head overlay
-        ctx.drawImage(img, 40, 8, 8, 8, offsetX + 4 * scale, offsetY, 8 * scale, 8 * scale);
-
-        // Draw body (8x12 at position 20,20)
-        ctx.drawImage(img, 20, 20, 8, 12, offsetX + 4 * scale, offsetY + 8 * scale, 8 * scale, 12 * scale);
-
-        // Draw right arm (4x12 at position 44,20)
-        ctx.drawImage(img, 44, 20, 4, 12, offsetX, offsetY + 8 * scale, 4 * scale, 12 * scale);
-
-        // Draw left arm (4x12 at position 36,52)
-        ctx.drawImage(img, 36, 52, 4, 12, offsetX + 12 * scale, offsetY + 8 * scale, 4 * scale, 12 * scale);
-
-        // Draw right leg (4x12 at position 4,20)
-        ctx.drawImage(img, 4, 20, 4, 12, offsetX + 4 * scale, offsetY + 20 * scale, 4 * scale, 12 * scale);
-
-        // Draw left leg (4x12 at position 20,52)
-        ctx.drawImage(img, 20, 52, 4, 12, offsetX + 8 * scale, offsetY + 20 * scale, 4 * scale, 12 * scale);
-
+        // Draw the front cape section, scaled to fit square
+        ctx.drawImage(img, srcX, srcY, srcSize, srcSize, 0, 0, size, size);
         setLoaded(true);
       };
       img.onerror = () => {
-        setError(true);
+        ctx.fillStyle = "#333";
+        ctx.fillRect(0, 0, size, size);
       };
-      img.src = skinUrl;
-    }, [skinUrl, width, height]);
-
-    if (error || !skinUrl) {
-      return (
-        <div className="skin-preview-error" style={{ width, height, display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" opacity="0.3">
-            <rect x="3" y="3" width="18" height="18" rx="2" />
-            <path d="M9 9h.01M15 9h.01M9 15h6" />
-          </svg>
-        </div>
-      );
-    }
+      img.src = capeUrl;
+    }, [capeUrl, size]);
 
     return (
       <canvas
         ref={canvasRef}
-        width={width}
-        height={height}
-        style={{
-          imageRendering: "pixelated",
-          opacity: loaded ? 1 : 0.5,
-          transition: "opacity 0.2s ease"
-        }}
+        width={size}
+        height={size}
+        style={{ imageRendering: "pixelated", borderRadius: 6, opacity: loaded ? 1 : 0.5 }}
       />
     );
   };
@@ -443,83 +368,6 @@ export function AccountView({ onAddAccount }: AccountViewProps) {
 
   return (
     <div className="view-transition account-view" >
-      {/* Account Selector Header */}
-      <div className="account-header">
-        <div className="account-selector" ref={dropdownRef}>
-          <button
-            className="account-selector-trigger"
-            onClick={() => setDropdownOpen(!dropdownOpen)}
-          >
-            {activeAccount && (
-              <>
-                {activeSkinUrl ? (
-                  <SkinHead skinUrl={activeSkinUrl} size={44} className="account-selector-avatar" />
-                ) : (
-                  <img
-                    className="account-selector-avatar"
-                    src={getAvatarUrl(activeAccount.uuid)}
-                    alt={activeAccount.username}
-                  />
-                )}
-                <div className="account-selector-info">
-                  <span className="account-selector-name">{activeAccount.username}</span>
-                  <span className="account-selector-hint">Click to switch accounts</span>
-                </div>
-                <svg className="account-selector-chevron" width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-                  <path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" />
-                </svg>
-              </>
-            )}
-          </button>
-
-          {dropdownOpen && (
-            <div className="account-selector-dropdown">
-              {accounts.accounts.map((account) => (
-                <button
-                  key={account.uuid}
-                  className={`account-selector-option ${account.uuid === activeAccount?.uuid ? "active" : ""}`}
-                  onClick={() => handleSetActiveAccount(account.uuid)}
-                >
-                  <img
-                    className="account-selector-option-avatar"
-                    src={getAvatarUrl(account.uuid)}
-                    alt={account.username}
-                  />
-                  <div className="account-selector-option-info">
-                    <span className="account-selector-option-name">{account.username}</span>
-                    <span className="account-selector-option-uuid">{account.uuid.slice(0, 8)}...</span>
-                  </div>
-                  {account.uuid === activeAccount?.uuid && (
-                    <svg className="account-selector-check" width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-                      <path d="M13.5 4.5l-7 7-3-3" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                  )}
-                  <button
-                    className="account-selector-remove"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      void handleRemoveAccount(account);
-                    }}
-                    title="Remove account"
-                  >
-                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5">
-                      <path d="M3 3l8 8M11 3l-8 8" />
-                    </svg>
-                  </button>
-                </button>
-              ))}
-              <div className="account-selector-dropdown-divider" />
-              <button className="account-selector-add" onClick={onAddAccount}>
-                <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor">
-                  <path d="M7 1v12M1 7h12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                </svg>
-                Add another account
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
-
       {loading && (
         <div className="account-loading">
           <div className="skin-viewer-loading" />
@@ -538,8 +386,86 @@ export function AccountView({ onAddAccount }: AccountViewProps) {
 
       {info && !loading && (
         <div className="account-content">
-          {/* 3D Skin Viewer */}
+          {/* Left column: Account selector + 3D Skin Viewer */}
           <div className="account-viewer">
+            {/* Account Selector */}
+            <div className="account-header">
+              <div className="account-selector" ref={dropdownRef}>
+                <button
+                  className="account-selector-trigger"
+                  onClick={() => setDropdownOpen(!dropdownOpen)}
+                >
+                  {activeAccount && (
+                    <>
+                      {activeSkinUrl ? (
+                        <SkinHead skinUrl={activeSkinUrl} size={44} className="account-selector-avatar" />
+                      ) : (
+                        <img
+                          className="account-selector-avatar"
+                          src={getAvatarUrl(activeAccount.uuid)}
+                          alt={activeAccount.username}
+                        />
+                      )}
+                      <div className="account-selector-info">
+                        <span className="account-selector-name">{activeAccount.username}</span>
+                        <span className="account-selector-hint">Click to switch accounts</span>
+                      </div>
+                      <svg className="account-selector-chevron" width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                        <path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" />
+                      </svg>
+                    </>
+                  )}
+                </button>
+
+                {dropdownOpen && (
+                  <div className="account-selector-dropdown">
+                    {accounts.accounts.map((account) => (
+                      <button
+                        key={account.uuid}
+                        className={`account-selector-option ${account.uuid === activeAccount?.uuid ? "active" : ""}`}
+                        onClick={() => handleSetActiveAccount(account.uuid)}
+                      >
+                        <img
+                          className="account-selector-option-avatar"
+                          src={getAvatarUrl(account.uuid)}
+                          alt={account.username}
+                        />
+                        <div className="account-selector-option-info">
+                          <span className="account-selector-option-name">{account.username}</span>
+                          <span className="account-selector-option-uuid">{account.uuid.slice(0, 8)}...</span>
+                        </div>
+                        {account.uuid === activeAccount?.uuid && (
+                          <svg className="account-selector-check" width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                            <path d="M13.5 4.5l-7 7-3-3" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+                          </svg>
+                        )}
+                        <button
+                          className="account-selector-remove"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void handleRemoveAccount(account);
+                          }}
+                          title="Remove account"
+                        >
+                          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5">
+                            <path d="M3 3l8 8M11 3l-8 8" />
+                          </svg>
+                        </button>
+                      </button>
+                    ))}
+                    <div className="account-selector-dropdown-divider" />
+                    <button className="account-selector-add" onClick={onAddAccount}>
+                      <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor">
+                        <path d="M7 1v12M1 7h12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                      </svg>
+                      Add another account
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* 3D Skin Viewer */}
             <SkinViewer
               skinUrl={activeSkinUrl}
               capeUrl={activeCapeUrl}
@@ -548,34 +474,8 @@ export function AccountView({ onAddAccount }: AccountViewProps) {
               height={400}
               animation="walk"
               animationSpeed={0.3}
+              className="account-skin-viewer"
             />
-            {/* Simple variant toggle below viewer */}
-            <div className="account-viewer-variant">
-              <button
-                className={`account-viewer-variant-btn ${skinVariant === "classic" ? "active" : ""}`}
-                onClick={() => setSkinVariant("classic")}
-                title="Classic (4px arms)"
-              >
-                <svg width="14" height="20" viewBox="0 0 14 20" fill="currentColor">
-                  <rect x="3" y="0" width="8" height="8" rx="1" />
-                  <rect x="3" y="9" width="8" height="7" rx="1" />
-                  <rect x="0" y="9" width="2" height="7" rx="0.5" />
-                  <rect x="12" y="9" width="2" height="7" rx="0.5" />
-                </svg>
-              </button>
-              <button
-                className={`account-viewer-variant-btn ${skinVariant === "slim" ? "active" : ""}`}
-                onClick={() => setSkinVariant("slim")}
-                title="Slim (3px arms)"
-              >
-                <svg width="14" height="20" viewBox="0 0 14 20" fill="currentColor">
-                  <rect x="3" y="0" width="8" height="8" rx="1" />
-                  <rect x="3" y="9" width="8" height="7" rx="1" />
-                  <rect x="0.5" y="9" width="1.5" height="7" rx="0.5" />
-                  <rect x="12" y="9" width="1.5" height="7" rx="0.5" />
-                </svg>
-              </button>
-            </div>
           </div>
 
           {/* Customization Panel */}
@@ -609,6 +509,36 @@ export function AccountView({ onAddAccount }: AccountViewProps) {
             <div className="account-tab-content">
               {tab === "skin" && (
                 <div className="account-skin-tab">
+                  {/* Skin variant selector */}
+                  <Field label="Skin Model">
+                    <div className="account-skin-variant">
+                      <button
+                        className={`account-skin-variant-btn ${skinVariant === "classic" ? "active" : ""}`}
+                        onClick={() => setSkinVariant("classic")}
+                      >
+                        <svg width="14" height="20" viewBox="0 0 14 20" fill="currentColor">
+                          <rect x="3" y="0" width="8" height="8" rx="1" />
+                          <rect x="3" y="9" width="8" height="7" rx="1" />
+                          <rect x="0" y="9" width="2" height="7" rx="0.5" />
+                          <rect x="12" y="9" width="2" height="7" rx="0.5" />
+                        </svg>
+                        Classic
+                      </button>
+                      <button
+                        className={`account-skin-variant-btn ${skinVariant === "slim" ? "active" : ""}`}
+                        onClick={() => setSkinVariant("slim")}
+                      >
+                        <svg width="14" height="20" viewBox="0 0 14 20" fill="currentColor">
+                          <rect x="3" y="0" width="8" height="8" rx="1" />
+                          <rect x="3" y="9" width="8" height="7" rx="1" />
+                          <rect x="0.5" y="9" width="1.5" height="7" rx="0.5" />
+                          <rect x="12" y="9" width="1.5" height="7" rx="0.5" />
+                        </svg>
+                        Slim
+                      </button>
+                    </div>
+                  </Field>
+
                   {/* Upload section */}
                   <div className="account-upload-section">
                     <button
@@ -708,10 +638,9 @@ export function AccountView({ onAddAccount }: AccountViewProps) {
                             onClick={() => setSelectedSkin(isSelected ? null : item)}
                           >
                             <div className="account-library-card-preview">
-                              <SkinPreview
+                              <SkinHead
                                 skinUrl={item.resolvedUrl || ""}
-                                width={80}
-                                height={120}
+                                size={48}
                               />
                             </div>
                             <div className="account-library-card-info">
@@ -780,10 +709,10 @@ export function AccountView({ onAddAccount }: AccountViewProps) {
                           onClick={handleHideCape}
                           disabled={uploading}
                         >
-                          <div className="account-cape-preview">
-                            <svg width="32" height="32" viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeWidth="1.5" opacity="0.4">
-                              <rect x="4" y="4" width="24" height="24" rx="2" strokeDasharray="4 2" />
-                              <path d="M8 8l16 16M24 8l-16 16" />
+                          <div className="account-cape-preview account-cape-preview-none">
+                            <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                              <circle cx="10" cy="10" r="8" />
+                              <path d="M5 15L15 5" />
                             </svg>
                           </div>
                           <div className="account-cape-info">
@@ -800,7 +729,7 @@ export function AccountView({ onAddAccount }: AccountViewProps) {
                           disabled={uploading || cape.state === "ACTIVE"}
                         >
                           <div className="account-cape-preview">
-                            <img src={cape.url} alt={cape.alias ?? cape.id} />
+                            <CapePreview capeUrl={cape.url} size={32} />
                           </div>
                           <div className="account-cape-info">
                             <span className="account-cape-name">{cape.alias ?? cape.id}</span>
