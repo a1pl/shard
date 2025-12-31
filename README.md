@@ -23,6 +23,10 @@
   <a href="#commands">Commands</a>
 </p>
 
+<p align="center">
+  <img src="screenshot.webp" alt="Shard Launcher - Profile Overview" width="800">
+</p>
+
 ---
 
 ## What is Shard?
