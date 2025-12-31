@@ -21,7 +21,7 @@ jobs:
             target: aarch64-apple-darwin
             name: macOS-arm64
           # macOS Intel
-          - platform: macos-13
+          - platform: macos-15-large
             target: x86_64-apple-darwin
             name: macOS-x64
           # Windows
