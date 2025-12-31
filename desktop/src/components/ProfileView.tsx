@@ -1,11 +1,11 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { openUrl } from "@tauri-apps/plugin-opener";
 import clsx from "clsx";
 import { useAppStore } from "../store";
 import type { ContentRef, ContentTab, Profile } from "../types";
-import { getContentTypeLabel, getContentTypeLabelPlural, formatContentName, formatVersion } from "../utils";
-import { PlatformIcon, PLATFORM_COLORS, type Platform } from "./PlatformIcon";
+import { getContentTypeLabel, getContentTypeLabelPlural } from "../utils";
+import { ContentItemRow } from "./ContentItemRow";
+import type { Platform } from "./PlatformIcon";
 
 interface ProfileViewProps {
   onLaunch: () => void;
@@ -17,39 +17,6 @@ interface ProfileViewProps {
 }
 
 type ExpandedDropdown = "version" | "loader" | null;
-
-function getPlatformLabel(platform: Platform): string {
-  if (platform === "modrinth") return "Modrinth";
-  if (platform === "curseforge") return "CurseForge";
-  return "Local";
-}
-
-function getPlatformColor(platform: Platform): string {
-  return PLATFORM_COLORS[platform as keyof typeof PLATFORM_COLORS] || PLATFORM_COLORS.local;
-}
-
-function getSourceUrl(item: ContentRef, contentType: ContentTab): string | null {
-  const platform = item.platform?.toLowerCase();
-  const projectId = item.project_id;
-
-  if (!projectId || platform === "local") return null;
-
-  // Map content type to URL path segment
-  const typeMap: Record<ContentTab, { modrinth: string; curseforge: string }> = {
-    mods: { modrinth: "mod", curseforge: "mc-mods" },
-    resourcepacks: { modrinth: "resourcepack", curseforge: "texture-packs" },
-    shaderpacks: { modrinth: "shader", curseforge: "shaders" },
-  };
-
-  if (platform === "modrinth") {
-    return `https://modrinth.com/${typeMap[contentType].modrinth}/${projectId}`;
-  }
-  if (platform === "curseforge") {
-    return `https://www.curseforge.com/minecraft/${typeMap[contentType].curseforge}/${projectId}`;
-  }
-
-  return null;
-}
 
 export function ProfileView({
   onLaunch,
@@ -375,11 +342,21 @@ export function ProfileView({
           </div>
         </div>
         <button
-          className="btn btn-primary"
+          className="btn-launch"
           onClick={onLaunch}
           disabled={!activeAccount || isWorking || !!launchStatus}
+          onMouseMove={(e) => {
+            const rect = e.currentTarget.getBoundingClientRect();
+            const x = ((e.clientX - rect.left) / rect.width) * 100;
+            const y = ((e.clientY - rect.top) / rect.height) * 100;
+            e.currentTarget.style.setProperty('--mouse-x', `${x}%`);
+            e.currentTarget.style.setProperty('--mouse-y', `${y}%`);
+          }}
         >
-          {launchStatus ? launchStatus.stage.charAt(0).toUpperCase() + launchStatus.stage.slice(1) : "Launch"}
+          <svg className="btn-launch-icon" width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M8 6.82v10.36c0 .79.87 1.27 1.54.84l8.14-5.18c.62-.39.62-1.29 0-1.69L9.54 5.98C8.87 5.55 8 6.03 8 6.82z" />
+          </svg>
+          <span>{launchStatus ? launchStatus.stage.charAt(0).toUpperCase() + launchStatus.stage.slice(1) : "Launch"}</span>
         </button>
       </div>
 
@@ -420,117 +397,66 @@ export function ProfileView({
               const platform = (item.platform?.toLowerCase() || "local") as Platform;
               const isPinned = item.pinned ?? false;
               const isEnabled = item.enabled ?? true;
-              const platformColor = getPlatformColor(platform);
-              const version = formatVersion(item.version);
-              const sourceUrl = getSourceUrl(item, activeTab);
 
               return (
-                <div key={item.hash} className={clsx("content-item-v2", isPinned && "content-item-pinned", !isEnabled && "content-item-disabled")}>
-                  {/* Platform indicator stripe */}
-                  <div
-                    className="content-item-platform-stripe"
-                    style={{ backgroundColor: platformColor }}
-                  />
-
-                  {/* Platform icon */}
-                  <div className="content-item-icon">
-                    <PlatformIcon platform={platform} size="lg" />
-                  </div>
-
-                  {/* Content info */}
-                  <div className="content-item-main">
-                    <div className="content-item-header">
-                      <h5 className="content-item-name">{formatContentName(item.name)}</h5>
-                      <div className="content-item-badges">
-                        {isPinned && (
-                          <span className="content-badge content-badge-pinned" title="Pinned - won't auto-update">
-                            <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
-                              <path d="M16 4h1v1h-1zm1 1h1v1h-1zm1 1h1v2h-1zm0 2h-1v1h1zm-1 1h-1v1h1zm-1 1h-1v1h1v1h-1v1h-1v1h-1v1h-1v1h1v3h-2v-3h1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1H9v-1H8V9h1V8h1V7h1V6h2v1h1v1h1V7h1V6h1V5h1v1z"/>
-                            </svg>
-                            Pinned
-                          </span>
-                        )}
-                        {!isEnabled && (
-                          <span className="content-badge content-badge-disabled" title="Disabled - won't be loaded">
-                            Disabled
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    <div className="content-item-meta">
-                      {version && (
-                        <span className="content-meta-version">v{version}</span>
-                      )}
-                      {sourceUrl ? (
-                        <button
-                          className="content-meta-platform content-meta-platform-link"
-                          style={{ color: platformColor }}
-                          onClick={() => openUrl(sourceUrl)}
-                          title={`Open on ${getPlatformLabel(platform)}`}
-                        >
-                          {getPlatformLabel(platform)}
-                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-                            <polyline points="15 3 21 3 21 9" />
-                            <line x1="10" y1="14" x2="21" y2="3" />
-                          </svg>
-                        </button>
-                      ) : (
-                        <span
-                          className="content-meta-platform"
-                          style={{ color: platformColor }}
-                        >
-                          {getPlatformLabel(platform)}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Actions */}
-                  <div className="content-item-actions">
-                    <button
-                      className={clsx("btn-icon", !isEnabled && "btn-icon-active")}
-                      onClick={() => handleToggleEnabled(item)}
-                      disabled={togglingEnabled === item.hash}
-                      title={isEnabled ? "Disable (won't load)" : "Enable (load in instance)"}
-                    >
-                      {togglingEnabled === item.hash ? (
-                        <span className="btn-icon-loading" />
-                      ) : (
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <path d="M12 2v6" strokeLinecap="round" strokeLinejoin="round" />
-                          <path d="M6.4 4.8a8 8 0 1 0 11.2 0" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                      )}
-                    </button>
-                    {platform !== "local" && (
+                <ContentItemRow
+                  key={item.hash}
+                  item={{
+                    name: item.name,
+                    hash: item.hash,
+                    version: item.version,
+                    platform: item.platform,
+                    project_id: item.project_id,
+                    enabled: item.enabled,
+                    pinned: item.pinned,
+                  }}
+                  contentType={activeTab}
+                  actions={
+                    <>
                       <button
-                        className={clsx("btn-icon", isPinned && "btn-icon-active")}
-                        onClick={() => handleTogglePin(item)}
-                        disabled={togglingPin === item.hash}
-                        title={isPinned ? "Unpin (allow auto-updates)" : "Pin (prevent auto-updates)"}
+                        className={clsx("btn-icon", !isEnabled && "btn-icon-active")}
+                        onClick={() => handleToggleEnabled(item)}
+                        disabled={togglingEnabled === item.hash}
+                        title={isEnabled ? "Disable (won't load)" : "Enable (load in instance)"}
                       >
-                        {togglingPin === item.hash ? (
+                        {togglingEnabled === item.hash ? (
                           <span className="btn-icon-loading" />
                         ) : (
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill={isPinned ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2">
-                            <path d="M12 2L12 12M12 12L8 8M12 12L16 8M5 15H19M7 19H17" strokeLinecap="round" strokeLinejoin="round" />
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M12 2v6" strokeLinecap="round" strokeLinejoin="round" />
+                            <path d="M6.4 4.8a8 8 0 1 0 11.2 0" strokeLinecap="round" strokeLinejoin="round" />
                           </svg>
                         )}
                       </button>
-                    )}
-                    <button
-                      className="btn-icon btn-icon-danger"
-                      onClick={() => onRemoveContent(item)}
-                      title="Remove from profile"
-                    >
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <polyline points="3 6 5 6 21 6" />
-                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                      </svg>
-                    </button>
-                  </div>
-                </div>
+                      {platform !== "local" && (
+                        <button
+                          className={clsx("btn-icon", isPinned && "btn-icon-active")}
+                          onClick={() => handleTogglePin(item)}
+                          disabled={togglingPin === item.hash}
+                          title={isPinned ? "Unpin (allow auto-updates)" : "Pin (prevent auto-updates)"}
+                        >
+                          {togglingPin === item.hash ? (
+                            <span className="btn-icon-loading" />
+                          ) : (
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill={isPinned ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2">
+                              <path d="M12 2L12 12M12 12L8 8M12 12L16 8M5 15H19M7 19H17" strokeLinecap="round" strokeLinejoin="round" />
+                            </svg>
+                          )}
+                        </button>
+                      )}
+                      <button
+                        className="btn-icon btn-icon-danger"
+                        onClick={() => onRemoveContent(item)}
+                        title="Remove from profile"
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="3 6 5 6 21 6" />
+                          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                        </svg>
+                      </button>
+                    </>
+                  }
+                />
               );
             })}
           </div>

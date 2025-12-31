@@ -397,6 +397,72 @@ impl Library {
             .ok_or_else(|| anyhow::anyhow!("item not found"))
     }
 
+    /// Update item metadata (source platform, project id, etc.)
+    pub fn update_item_metadata(
+        &self,
+        id: i64,
+        name: Option<&str>,
+        file_name: Option<&str>,
+        source_url: Option<&str>,
+        source_platform: Option<&str>,
+        source_project_id: Option<&str>,
+        source_version: Option<&str>,
+    ) -> Result<LibraryItem> {
+        self.conn.execute(
+            r#"
+            UPDATE library_items SET
+                name = COALESCE(?2, name),
+                file_name = COALESCE(?3, file_name),
+                source_url = COALESCE(?4, source_url),
+                source_platform = COALESCE(?5, source_platform),
+                source_project_id = COALESCE(?6, source_project_id),
+                source_version = COALESCE(?7, source_version),
+                updated_at = datetime('now')
+            WHERE id = ?1
+            "#,
+            params![id, name, file_name, source_url, source_platform, source_project_id, source_version],
+        )?;
+
+        self.get_item(id)?
+            .ok_or_else(|| anyhow::anyhow!("item not found"))
+    }
+
+    /// Enrich library item metadata from a ContentRef (e.g., from a profile)
+    pub fn enrich_item_from_content_ref(
+        &self,
+        hash: &str,
+        name: &str,
+        file_name: Option<&str>,
+        source: Option<&str>,
+        platform: Option<&str>,
+        project_id: Option<&str>,
+        version: Option<&str>,
+    ) -> Result<Option<LibraryItem>> {
+        let normalized_hash = normalize_hash(hash);
+        if let Some(item) = self.get_item_by_hash(&normalized_hash)? {
+            // Only update if the item has generic/store metadata
+            let needs_update = item.source_platform.as_deref() == Some("store")
+                || item.source_platform.is_none()
+                || item.name.starts_with("mod-")
+                || item.name.starts_with("resourcepack-")
+                || item.name.starts_with("shaderpack-");
+
+            if needs_update {
+                return Ok(Some(self.update_item_metadata(
+                    item.id,
+                    Some(name),
+                    file_name,
+                    source,
+                    platform,
+                    project_id,
+                    version,
+                )?));
+            }
+            return Ok(Some(item));
+        }
+        Ok(None)
+    }
+
     /// Delete an item
     pub fn delete_item(&self, id: i64) -> Result<bool> {
         let rows = self

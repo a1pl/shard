@@ -80,6 +80,7 @@ pub fn run() {
             commands::library_import_folder_cmd,
             commands::library_get_stats_cmd,
             commands::library_sync_cmd,
+            commands::library_enrich_from_profiles_cmd,
             commands::library_list_tags_cmd,
             commands::library_create_tag_cmd,
             commands::library_delete_tag_cmd,

@@ -23,7 +23,9 @@ export function Modal({ open, onClose, title, large, className, children }: Moda
             </svg>
           </button>
         </div>
-        {children}
+        <div className="modal-body">
+          {children}
+        </div>
       </div>
     </div>,
     document.body

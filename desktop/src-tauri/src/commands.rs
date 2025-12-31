@@ -1400,7 +1400,76 @@ pub fn library_get_stats_cmd() -> Result<LibraryStats, String> {
 pub fn library_sync_cmd() -> Result<ImportResult, String> {
     let paths = load_paths()?;
     let library = Library::from_paths(&paths).map_err(|e| e.to_string())?;
-    library.sync_with_store(&paths).map_err(|e| e.to_string())
+    let result = library.sync_with_store(&paths).map_err(|e| e.to_string())?;
+
+    // After syncing, enrich library items with metadata from profiles
+    let _ = enrich_library_from_profiles(&paths, &library);
+
+    Ok(result)
+}
+
+/// Enrich library items with metadata from all profiles
+fn enrich_library_from_profiles(paths: &Paths, library: &Library) -> Result<usize, String> {
+    let profiles = list_profiles(paths).map_err(|e| e.to_string())?;
+    let mut enriched = 0;
+
+    for profile_id in profiles {
+        if let Ok(profile) = load_profile(paths, &profile_id) {
+            // Enrich from mods
+            for content in &profile.mods {
+                if library.enrich_item_from_content_ref(
+                    &content.hash,
+                    &content.name,
+                    content.file_name.as_deref(),
+                    content.source.as_deref(),
+                    content.platform.as_deref(),
+                    content.project_id.as_deref(),
+                    content.version.as_deref(),
+                ).is_ok() {
+                    enriched += 1;
+                }
+            }
+
+            // Enrich from resourcepacks
+            for content in &profile.resourcepacks {
+                if library.enrich_item_from_content_ref(
+                    &content.hash,
+                    &content.name,
+                    content.file_name.as_deref(),
+                    content.source.as_deref(),
+                    content.platform.as_deref(),
+                    content.project_id.as_deref(),
+                    content.version.as_deref(),
+                ).is_ok() {
+                    enriched += 1;
+                }
+            }
+
+            // Enrich from shaderpacks
+            for content in &profile.shaderpacks {
+                if library.enrich_item_from_content_ref(
+                    &content.hash,
+                    &content.name,
+                    content.file_name.as_deref(),
+                    content.source.as_deref(),
+                    content.platform.as_deref(),
+                    content.project_id.as_deref(),
+                    content.version.as_deref(),
+                ).is_ok() {
+                    enriched += 1;
+                }
+            }
+        }
+    }
+
+    Ok(enriched)
+}
+
+#[tauri::command]
+pub fn library_enrich_from_profiles_cmd() -> Result<usize, String> {
+    let paths = load_paths()?;
+    let library = Library::from_paths(&paths).map_err(|e| e.to_string())?;
+    enrich_library_from_profiles(&paths, &library)
 }
 
 #[tauri::command]

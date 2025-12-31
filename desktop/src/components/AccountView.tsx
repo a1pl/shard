@@ -470,8 +470,9 @@ export function AccountView({ onAddAccount }: AccountViewProps) {
               skinUrl={activeSkinUrl}
               capeUrl={activeCapeUrl}
               model={skinVariant}
-              width={280}
-              height={400}
+              width={200}
+              height={240}
+              zoom={1.3}
               animation="walk"
               animationSpeed={0.3}
               className="account-skin-viewer"

@@ -215,8 +215,8 @@ const styles = `
 
   .launcher-body {
     position: relative;
-    /* Screenshot dimensions: window (1280x760) + margin (32px each side) at 2x = 2688x1648 */
-    aspect-ratio: 1344 / 824;
+    /* Screenshot dimensions: actual captured size at 1x = 1101x652 (2202x1304 at 2x retina) */
+    aspect-ratio: 1101 / 652;
     background: rgb(18 17 16);
   }
 
@@ -320,7 +320,7 @@ const styles = `
 
   @media (max-width: 640px) {
     .launcher-body {
-      aspect-ratio: 1344 / 824;
+      aspect-ratio: 1101 / 652;
     }
 
     .nav-button {

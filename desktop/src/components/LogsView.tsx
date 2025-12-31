@@ -254,30 +254,32 @@ export function LogsView() {
       {(tab === "history" || tab === "crashes") && !selectedFile && (
         <div className="logs-file-list">
           {((tab === "history" ? logFiles : crashReports).length === 0) ? (
-            <div className="logs-empty-state">
-              <svg width="40" height="40" viewBox="0 0 40 40" fill="none" style={{ opacity: 0.3 }}>
-                {tab === "crashes" ? (
-                  <>
-                    <path d="M20 8L32 30H8L20 8z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                    <path d="M20 16v6M20 26h.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                  </>
-                ) : (
-                  <>
-                    <rect x="10" y="8" width="20" height="24" rx="2" stroke="currentColor" strokeWidth="2" />
-                    <path d="M14 14h12M14 20h8M14 26h10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                  </>
-                )}
-              </svg>
-              <p>
-                {tab === "crashes"
-                  ? "No crash reports"
-                  : "No log files yet"}
-              </p>
-              <span>
-                {tab === "crashes"
-                  ? "Crash reports appear when the game encounters errors"
-                  : "Launch the game to generate logs"}
-              </span>
+            <div className="empty-state-container">
+              <div className="empty-state">
+                <svg width="48" height="48" viewBox="0 0 48 48" fill="none" style={{ opacity: 0.4, marginBottom: 16 }}>
+                  {tab === "crashes" ? (
+                    <>
+                      <path d="M24 10L40 38H8L24 10z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                      <path d="M24 20v8M24 32h.02" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                    </>
+                  ) : (
+                    <>
+                      <rect x="10" y="8" width="28" height="32" rx="3" stroke="currentColor" strokeWidth="2" />
+                      <path d="M16 16h16M16 24h12M16 32h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                    </>
+                  )}
+                </svg>
+                <h3>
+                  {tab === "crashes"
+                    ? "No crash reports"
+                    : "No log files yet"}
+                </h3>
+                <p style={{ marginBottom: 0 }}>
+                  {tab === "crashes"
+                    ? "Crash reports appear when the game encounters errors"
+                    : "Launch the game to generate logs"}
+                </p>
+              </div>
             </div>
           ) : (
             (tab === "history" ? logFiles : crashReports).map((file) => (

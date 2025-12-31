@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { invoke } from "@tauri-apps/api/core";
 import clsx from "clsx";
 import {
   DndContext,
@@ -67,6 +68,11 @@ function DraggableProfileItem({
   isSelected,
   isFavorite,
   inFolder,
+  isEditing,
+  editingName,
+  onEditChange,
+  onFinishRename,
+  onCancelRename,
   onSelect,
   onContextMenu,
 }: {
@@ -74,6 +80,11 @@ function DraggableProfileItem({
   isSelected: boolean;
   isFavorite: boolean;
   inFolder: boolean;
+  isEditing?: boolean;
+  editingName?: string;
+  onEditChange?: (name: string) => void;
+  onFinishRename?: () => void;
+  onCancelRename?: () => void;
   onSelect: () => void;
   onContextMenu: (e: React.MouseEvent) => void;
 }) {
@@ -81,6 +92,45 @@ function DraggableProfileItem({
     id: `profile-${id}`,
     data: { type: "profile", profileId: id },
   });
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (isEditing && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
+    }
+  }, [isEditing]);
+
+  if (isEditing) {
+    return (
+      <div
+        className={clsx(
+          "profile-dropdown-item",
+          isSelected && "active",
+          inFolder && "indented"
+        )}
+      >
+        {isFavorite && (
+          <svg className="profile-dropdown-star" width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
+            <path d="M6 1l1.545 3.13 3.455.502-2.5 2.436.59 3.441L6 8.885 2.91 10.51l.59-3.441L1 4.632l3.455-.502L6 1z" />
+          </svg>
+        )}
+        <input
+          ref={inputRef}
+          type="text"
+          className="profile-rename-input"
+          value={editingName}
+          onChange={(e) => onEditChange?.(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") onFinishRename?.();
+            if (e.key === "Escape") onCancelRename?.();
+          }}
+          onBlur={onFinishRename}
+          onClick={(e) => e.stopPropagation()}
+        />
+      </div>
+    );
+  }
 
   return (
     <button
@@ -247,6 +297,8 @@ export function Sidebar({
     setFavoriteProfile,
     loadProfileOrganization,
     syncProfileOrganization,
+    loadProfiles,
+    notify,
   } = useAppStore();
 
   const activeAccount = getActiveAccount();
@@ -254,6 +306,8 @@ export function Sidebar({
   const [showAddMenu, setShowAddMenu] = useState(false);
   const [editingFolderId, setEditingFolderId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
+  const [renamingProfileId, setRenamingProfileId] = useState<string | null>(null);
+  const [renamingProfileName, setRenamingProfileName] = useState("");
   const [draggedProfileId, setDraggedProfileId] = useState<string | null>(null);
   const profileMenuRef = useRef<HTMLDivElement>(null);
   const addMenuRef = useRef<HTMLDivElement>(null);
@@ -341,6 +395,38 @@ export function Sidebar({
     setEditingName("");
   };
 
+  const handleStartProfileRename = (profileId: string) => {
+    setRenamingProfileId(profileId);
+    setRenamingProfileName(profileId);
+    setContextMenuTarget(null);
+  };
+
+  const handleFinishProfileRename = async () => {
+    if (!renamingProfileId) return;
+
+    const newName = renamingProfileName.trim();
+    if (newName && newName !== renamingProfileId) {
+      try {
+        await invoke("rename_profile_cmd", { id: renamingProfileId, newId: newName });
+        // Update selection if we renamed the selected profile
+        if (selectedProfileId === renamingProfileId) {
+          setSelectedProfileId(newName);
+        }
+        // Reload profiles list
+        await loadProfiles();
+      } catch (err) {
+        notify("Rename failed", String(err));
+      }
+    }
+    setRenamingProfileId(null);
+    setRenamingProfileName("");
+  };
+
+  const handleCancelProfileRename = () => {
+    setRenamingProfileId(null);
+    setRenamingProfileName("");
+  };
+
   const handleSelectProfile = (id: string) => {
     setSelectedProfileId(id);
     setSidebarView("profiles");
@@ -394,6 +480,8 @@ export function Sidebar({
     const matchesFilter = filteredProfiles.includes(id);
     if (!matchesFilter && profileFilter) return null;
 
+    const isRenaming = renamingProfileId === id;
+
     return (
       <DraggableProfileItem
         key={id}
@@ -401,6 +489,11 @@ export function Sidebar({
         isSelected={isSelected}
         isFavorite={isFavorite(id)}
         inFolder={inFolder}
+        isEditing={isRenaming}
+        editingName={isRenaming ? renamingProfileName : undefined}
+        onEditChange={setRenamingProfileName}
+        onFinishRename={handleFinishProfileRename}
+        onCancelRename={handleCancelProfileRename}
         onSelect={() => handleSelectProfile(id)}
         onContextMenu={(e) => handleContextMenu(e, "profile", id)}
       />
@@ -600,8 +693,8 @@ export function Sidebar({
           data-tauri-drag-region="false"
         >
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-            <circle cx="8" cy="8" r="2" stroke="currentColor" strokeWidth="1.5" />
-            <path d="M8 1v2M8 13v2M1 8h2M13 8h2M2.93 2.93l1.41 1.41M11.66 11.66l1.41 1.41M2.93 13.07l1.41-1.41M11.66 4.34l1.41-1.41" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+            <path d="M6.5 1.5h3v1.67a.5.5 0 00.32.47l.35.13a.5.5 0 00.54-.1l1.18-1.18 2.12 2.12-1.18 1.18a.5.5 0 00-.1.54l.13.35a.5.5 0 00.47.32h1.67v3h-1.67a.5.5 0 00-.47.32l-.13.35a.5.5 0 00.1.54l1.18 1.18-2.12 2.12-1.18-1.18a.5.5 0 00-.54-.1l-.35.13a.5.5 0 00-.32.47v1.67h-3v-1.67a.5.5 0 00-.32-.47l-.35-.13a.5.5 0 00-.54.1l-1.18 1.18-2.12-2.12 1.18-1.18a.5.5 0 00.1-.54l-.13-.35a.5.5 0 00-.47-.32H1.5v-3h1.67a.5.5 0 00.47-.32l.13-.35a.5.5 0 00-.1-.54L2.49 4.61l2.12-2.12 1.18 1.18a.5.5 0 00.54.1l.35-.13a.5.5 0 00.32-.47V1.5z" stroke="currentColor" strokeWidth="1.25" strokeLinejoin="round" />
+            <circle cx="8" cy="8" r="2" stroke="currentColor" strokeWidth="1.25" />
           </svg>
           Settings
         </button>
@@ -672,6 +765,11 @@ export function Sidebar({
                 }}
               >
                 Clone
+              </button>
+              <button
+                onClick={() => handleStartProfileRename(contextMenuTarget.id)}
+              >
+                Rename
               </button>
               <div className="menu-divider" />
               <button
