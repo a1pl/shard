@@ -3,7 +3,7 @@ import clsx from "clsx";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { openPath } from "@tauri-apps/plugin-opener";
+import { openPath, revealItemInDir } from "@tauri-apps/plugin-opener";
 
 import { useAppStore } from "./store";
 import { useOnline } from "./hooks";
@@ -20,7 +20,6 @@ import {
   DiffProfilesModal,
   AddContentModal,
   DeviceCodeModal,
-  LaunchPlanModal,
   ProfileJsonModal,
 } from "./components";
 import { formatContentName } from "./utils";
@@ -62,8 +61,6 @@ function App() {
     setConfirmState,
     debugDrag,
     setDebugDrag,
-    plan,
-    setPlan,
     loadProfiles,
     loadProfile,
     loadAccounts,
@@ -79,13 +76,19 @@ function App() {
   // Content modal state
   const contentKind = useAppStore((s) => s.activeTab);
 
+  // Precache version data for instant dropdowns
+  const { precacheMcVersions, precacheFabricVersions } = useAppStore();
+
   // Initial load
   useEffect(() => {
     const loadInitial = async () => {
       await Promise.all([loadProfiles(), loadAccounts(), loadConfig()]);
+      // Precache version data in background (don't await - non-blocking)
+      void precacheMcVersions();
+      void precacheFabricVersions();
     };
     void loadInitial();
-  }, [loadProfiles, loadAccounts, loadConfig]);
+  }, [loadProfiles, loadAccounts, loadConfig, precacheMcVersions, precacheFabricVersions]);
 
   // Load profile when selection changes
   useEffect(() => {
@@ -242,36 +245,28 @@ function App() {
       notify("No account", "Add an account first.");
       return;
     }
+    setLaunchStatus({ stage: "queued" });
     await runAction(async () => {
       await invoke("launch_profile_cmd", {
         profileId: selectedProfileId,
         accountId: activeAccount.uuid,
       });
-      setLaunchStatus({ stage: "queued" });
     });
   }, [selectedProfileId, getActiveAccount, notify, runAction, setLaunchStatus]);
 
-  const handlePrepare = useCallback(async () => {
-    const activeAccount = getActiveAccount();
-    if (!selectedProfileId || !activeAccount) {
-      notify("No account", "Add an account first.");
-      return;
-    }
-    await runAction(async () => {
-      const planData = await invoke<typeof plan>("prepare_profile_cmd", {
-        profile_id: selectedProfileId,
-        account_id: activeAccount.uuid,
-      });
-      setPlan(planData);
-      setActiveModal("prepare");
-    });
-  }, [selectedProfileId, getActiveAccount, notify, runAction, setPlan, setActiveModal]);
-
   const handleOpenInstance = useCallback(async () => {
     if (!selectedProfileId) return;
-    const path = await invoke<string>("instance_path_cmd", { profile_id: selectedProfileId });
-    await openPath(path);
-  }, [selectedProfileId]);
+    try {
+      const path = await invoke<string>("instance_path_cmd", { profile_id: selectedProfileId });
+      try {
+        await revealItemInDir(path);
+      } catch {
+        await openPath(path);
+      }
+    } catch (err) {
+      notify("Failed to open folder", String(err));
+    }
+  }, [selectedProfileId, notify]);
 
   const handleCopyCommand = useCallback(async () => {
     if (!selectedProfileId) return;
@@ -346,7 +341,6 @@ function App() {
                   <ProfileView
                     key={profile.id}
                     onLaunch={handleLaunch}
-                    onPrepare={handlePrepare}
                     onOpenInstance={handleOpenInstance}
                     onCopyCommand={handleCopyCommand}
                     onShowJson={() => setActiveModal("json")}
@@ -434,12 +428,6 @@ function App() {
           open={activeModal === "device-code"}
           onClose={() => setActiveModal(null)}
           onSuccess={handleDeviceCodeSuccess}
-        />
-
-        <LaunchPlanModal
-          open={activeModal === "prepare"}
-          plan={plan}
-          onClose={() => setActiveModal(null)}
         />
 
         <ProfileJsonModal

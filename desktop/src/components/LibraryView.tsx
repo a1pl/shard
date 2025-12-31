@@ -1,31 +1,38 @@
 import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { convertFileSrc } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import clsx from "clsx";
 import { useAppStore } from "../store";
+import { SkinHead } from "./SkinThumbnail";
 import type { LibraryItem, LibraryTag, LibraryStats, LibraryFilter, LibraryImportResult, LibraryContentType } from "../types";
 import { formatFileSize, formatContentName, formatFileName } from "../utils";
+
+// Extended library item with resolved skin URL for skins
+interface LibraryItemWithUrl extends LibraryItem {
+  resolvedUrl?: string;
+}
 
 type LibraryCategory = "all" | "mod" | "resourcepack" | "shaderpack" | "skin";
 
 const CATEGORY_LABELS: Record<LibraryCategory, string> = {
   all: "All",
   mod: "Mods",
-  resourcepack: "Resource Packs",
+  resourcepack: "Packs",
   shaderpack: "Shaders",
   skin: "Skins",
 };
 
 export function LibraryView() {
   const { selectedProfileId, notify, loadProfile } = useAppStore();
-  const [items, setItems] = useState<LibraryItem[]>([]);
+  const [items, setItems] = useState<LibraryItemWithUrl[]>([]);
   const [tags, setTags] = useState<LibraryTag[]>([]);
   const [stats, setStats] = useState<LibraryStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [category, setCategory] = useState<LibraryCategory>("all");
   const [search, setSearch] = useState("");
   const [selectedTagFilter, setSelectedTagFilter] = useState<string | null>(null);
-  const [selectedItem, setSelectedItem] = useState<LibraryItem | null>(null);
+  const [selectedItem, setSelectedItem] = useState<LibraryItemWithUrl | null>(null);
   const [importing, setImporting] = useState(false);
   const [showTagDropdown, setShowTagDropdown] = useState(false);
   const isSystemTag = (name: string) => name.startsWith("mc:") || name.startsWith("loader:");
@@ -40,7 +47,26 @@ export function LibraryView() {
         limit: 100,
       };
       const data = await invoke<LibraryItem[]>("library_list_items_cmd", { filter });
-      setItems(data);
+
+      // Resolve file paths to asset URLs for skin items
+      const itemsWithUrls: LibraryItemWithUrl[] = await Promise.all(
+        data.map(async (item) => {
+          if (item.content_type === "skin") {
+            try {
+              const path = await invoke<string | null>("library_get_item_path_cmd", { id: item.id });
+              return {
+                ...item,
+                resolvedUrl: path ? convertFileSrc(path) : item.source_url || "",
+              };
+            } catch {
+              return { ...item, resolvedUrl: item.source_url || "" };
+            }
+          }
+          return item;
+        })
+      );
+
+      setItems(itemsWithUrls);
     } catch (err) {
       notify("Failed to load library", String(err));
     }
@@ -301,17 +327,17 @@ export function LibraryView() {
       )}
 
       {/* Content */}
-      <div style={{ display: "flex", gap: 24 }}>
+      <div style={{ display: "flex", gap: 24, flex: 1, minHeight: 0 }}>
         {/* Items list */}
-        <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
           {loading && (
             <p style={{ color: "var(--text-muted)", fontSize: 13 }}>Loading library...</p>
           )}
 
           {!loading && items.length === 0 && (
-            <div className="empty-state" style={{ padding: 40 }}>
+            <div className="empty-state">
               <h3>Library is empty</h3>
-              <p>Import files or download content from the store to get started.</p>
+              <p style={{ marginBottom: 0 }}>Import files or download content from the store to get started.</p>
             </div>
           )}
 
@@ -327,23 +353,27 @@ export function LibraryView() {
               }}
             >
               <div style={{ display: "flex", gap: 12, alignItems: "flex-start", flex: 1, minWidth: 0 }}>
-                <div
-                  style={{
-                    width: 40,
-                    height: 40,
-                    borderRadius: 8,
-                    background: "rgba(255, 255, 255, 0.05)",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontSize: 16,
-                    fontWeight: 600,
-                    flexShrink: 0,
-                    color: "var(--text-secondary)",
-                  }}
-                >
-                  {getContentTypeIcon(item.content_type)}
-                </div>
+                {item.content_type === "skin" && item.resolvedUrl ? (
+                  <SkinHead skinUrl={item.resolvedUrl} size={40} />
+                ) : (
+                  <div
+                    style={{
+                      width: 40,
+                      height: 40,
+                      borderRadius: 8,
+                      background: "rgba(255, 255, 255, 0.05)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontSize: 16,
+                      fontWeight: 600,
+                      flexShrink: 0,
+                      color: "var(--text-secondary)",
+                    }}
+                  >
+                    {getContentTypeIcon(item.content_type)}
+                  </div>
+                )}
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <h5 style={{ margin: 0, fontSize: 14, fontWeight: 500 }}>{formatContentName(item.name)}</h5>
                   <p

@@ -1,14 +1,14 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import clsx from "clsx";
 import { useAppStore } from "../store";
-import type { ContentRef, ContentTab, Profile, ManifestVersion, MinecraftVersionsResponse } from "../types";
+import type { ContentRef, ContentTab, Profile } from "../types";
 import { getContentTypeLabel, getContentTypeLabelPlural, formatContentName, formatVersion } from "../utils";
 import { PlatformIcon, PLATFORM_COLORS, type Platform } from "./PlatformIcon";
 
 interface ProfileViewProps {
   onLaunch: () => void;
-  onPrepare: () => void;
   onOpenInstance: () => void;
   onCopyCommand: () => void;
   onShowJson: () => void;
@@ -28,9 +28,31 @@ function getPlatformColor(platform: Platform): string {
   return PLATFORM_COLORS[platform as keyof typeof PLATFORM_COLORS] || PLATFORM_COLORS.local;
 }
 
+function getSourceUrl(item: ContentRef, contentType: ContentTab): string | null {
+  const platform = item.platform?.toLowerCase();
+  const projectId = item.project_id;
+
+  if (!projectId || platform === "local") return null;
+
+  // Map content type to URL path segment
+  const typeMap: Record<ContentTab, { modrinth: string; curseforge: string }> = {
+    mods: { modrinth: "mod", curseforge: "mc-mods" },
+    resourcepacks: { modrinth: "resourcepack", curseforge: "texture-packs" },
+    shaderpacks: { modrinth: "shader", curseforge: "shaders" },
+  };
+
+  if (platform === "modrinth") {
+    return `https://modrinth.com/${typeMap[contentType].modrinth}/${projectId}`;
+  }
+  if (platform === "curseforge") {
+    return `https://www.curseforge.com/minecraft/${typeMap[contentType].curseforge}/${projectId}`;
+  }
+
+  return null;
+}
+
 export function ProfileView({
   onLaunch,
-  onPrepare,
   onOpenInstance,
   onCopyCommand,
   onShowJson,
@@ -46,6 +68,13 @@ export function ProfileView({
     loadProfile,
     notify,
     launchStatus,
+    // Precached version data from store
+    mcVersions,
+    mcVersionLoading: mcVersionsLoading,
+    loaderVersions: fabricVersions,
+    loaderLoading: fabricLoading,
+    precacheMcVersions,
+    precacheFabricVersions,
   } = useAppStore();
 
   const activeAccount = getActiveAccount();
@@ -54,11 +83,7 @@ export function ProfileView({
 
   // Inline version/loader editing state
   const [expandedDropdown, setExpandedDropdown] = useState<ExpandedDropdown>(null);
-  const [mcVersions, setMcVersions] = useState<ManifestVersion[]>([]);
-  const [mcVersionsLoading, setMcVersionsLoading] = useState(false);
   const [showSnapshots, setShowSnapshots] = useState(false);
-  const [fabricVersions, setFabricVersions] = useState<string[]>([]);
-  const [fabricLoading, setFabricLoading] = useState(false);
   const [selectedLoaderType, setSelectedLoaderType] = useState<string>("");
   const [selectedLoaderVersion, setSelectedLoaderVersion] = useState<string>("");
   const [saving, setSaving] = useState(false);
@@ -77,53 +102,32 @@ export function ProfileView({
     }
   }, [expandedDropdown]);
 
-  // Load MC versions when version dropdown opens
-  const loadMcVersions = useCallback(async () => {
-    if (mcVersions.length > 0) return;
-    setMcVersionsLoading(true);
-    try {
-      const response = await invoke<MinecraftVersionsResponse>("fetch_minecraft_versions_cmd");
-      setMcVersions(response.versions);
-    } catch (err) {
-      notify("Failed to load versions", String(err));
-    } finally {
-      setMcVersionsLoading(false);
-    }
-  }, [mcVersions.length, notify]);
-
-  // Load Fabric versions when loader dropdown opens
-  const loadFabricVersions = useCallback(async () => {
-    if (fabricVersions.length > 0) return;
-    setFabricLoading(true);
-    try {
-      const versions = await invoke<string[]>("fetch_fabric_versions_cmd");
-      setFabricVersions(versions);
-    } catch (err) {
-      notify("Failed to load Fabric versions", String(err));
-    } finally {
-      setFabricLoading(false);
-    }
-  }, [fabricVersions.length, notify]);
-
-  const handleExpandVersion = () => {
+  // Ensure versions are loaded (fallback if precache hasn't completed yet)
+  const handleExpandVersion = useCallback(() => {
     if (expandedDropdown === "version") {
       setExpandedDropdown(null);
     } else {
       setExpandedDropdown("version");
-      void loadMcVersions();
+      // Trigger load if not cached yet (will be instant if already cached)
+      if (mcVersions.length === 0) {
+        void precacheMcVersions();
+      }
     }
-  };
+  }, [expandedDropdown, mcVersions.length, precacheMcVersions]);
 
-  const handleExpandLoader = () => {
+  const handleExpandLoader = useCallback(() => {
     if (expandedDropdown === "loader") {
       setExpandedDropdown(null);
     } else {
       setExpandedDropdown("loader");
       setSelectedLoaderType(profile?.loader?.type || "");
       setSelectedLoaderVersion(profile?.loader?.version || "");
-      void loadFabricVersions();
+      // Trigger load if not cached yet (will be instant if already cached)
+      if (fabricVersions.length === 0) {
+        void precacheFabricVersions();
+      }
     }
-  };
+  }, [expandedDropdown, profile?.loader?.type, profile?.loader?.version, fabricVersions.length, precacheFabricVersions]);
 
   const handleVersionSelect = async (version: string) => {
     if (!profile || version === profile.mcVersion) {
@@ -387,7 +391,7 @@ export function ProfileView({
               Mods<span className="count">{contentCounts.mods}</span>
             </button>
             <button className={clsx("content-tab", activeTab === "resourcepacks" && "active")} onClick={() => setActiveTab("resourcepacks")}>
-              Resource Packs<span className="count">{contentCounts.resourcepacks}</span>
+              Packs<span className="count">{contentCounts.resourcepacks}</span>
             </button>
             <button className={clsx("content-tab", activeTab === "shaderpacks" && "active")} onClick={() => setActiveTab("shaderpacks")}>
               Shaders<span className="count">{contentCounts.shaderpacks}</span>
@@ -418,6 +422,7 @@ export function ProfileView({
               const isEnabled = item.enabled ?? true;
               const platformColor = getPlatformColor(platform);
               const version = formatVersion(item.version);
+              const sourceUrl = getSourceUrl(item, activeTab);
 
               return (
                 <div key={item.hash} className={clsx("content-item-v2", isPinned && "content-item-pinned", !isEnabled && "content-item-disabled")}>
@@ -456,12 +461,28 @@ export function ProfileView({
                       {version && (
                         <span className="content-meta-version">v{version}</span>
                       )}
-                      <span
-                        className="content-meta-platform"
-                        style={{ color: platformColor }}
-                      >
-                        {getPlatformLabel(platform)}
-                      </span>
+                      {sourceUrl ? (
+                        <button
+                          className="content-meta-platform content-meta-platform-link"
+                          style={{ color: platformColor }}
+                          onClick={() => openUrl(sourceUrl)}
+                          title={`Open on ${getPlatformLabel(platform)}`}
+                        >
+                          {getPlatformLabel(platform)}
+                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                            <polyline points="15 3 21 3 21 9" />
+                            <line x1="10" y1="14" x2="21" y2="3" />
+                          </svg>
+                        </button>
+                      ) : (
+                        <span
+                          className="content-meta-platform"
+                          style={{ color: platformColor }}
+                        >
+                          {getPlatformLabel(platform)}
+                        </span>
+                      )}
                     </div>
                   </div>
 
@@ -524,7 +545,6 @@ export function ProfileView({
         <div className="actions-row">
           <button className="btn btn-ghost btn-sm" onClick={onOpenInstance}>Open folder</button>
           <button className="btn btn-ghost btn-sm" onClick={onCopyCommand}>Copy CLI command</button>
-          <button className="btn btn-ghost btn-sm" onClick={onPrepare}>View launch plan</button>
           <button className="btn btn-ghost btn-sm" onClick={onShowJson}>View JSON</button>
         </div>
       </div>
