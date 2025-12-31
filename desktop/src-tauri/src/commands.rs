@@ -1006,6 +1006,13 @@ pub fn read_crash_report_cmd(profile_id: String, file: Option<String>) -> Result
     std::fs::read_to_string(&crash_path).map_err(|e| e.to_string())
 }
 
+fn sanitize_event_segment(value: &str) -> String {
+    value
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() || matches!(c, '-' | '/' | ':' | '_') { c } else { '_' })
+        .collect()
+}
+
 /// Start watching a log file and emit events for new entries
 #[tauri::command]
 pub async fn start_log_watch(
@@ -1015,24 +1022,39 @@ pub async fn start_log_watch(
     let paths = load_paths()?;
     let log_path = paths.instance_latest_log(&profile_id);
 
+    eprintln!("[logs] Starting log watch for profile '{}' at path: {:?}", profile_id, log_path);
+
     // Spawn background task to watch the log
     std::thread::spawn(move || {
-        let mut watcher = LogWatcher::from_start(log_path);
+        let mut watcher = LogWatcher::from_start(log_path.clone());
+        let event_name = format!("log-entries-{}", sanitize_event_segment(&profile_id));
+        eprintln!("[logs] Watcher thread started, event name: {}", event_name);
 
         loop {
             // Read new entries
             match watcher.read_new() {
                 Ok(entries) if !entries.is_empty() => {
+                    eprintln!("[logs] Read {} new log entries", entries.len());
                     // Emit event with new log entries
-                    if app.emit(&format!("log-entries-{}", profile_id), &entries).is_err() {
+                    if let Err(e) = app.emit(&event_name, &entries) {
+                        eprintln!("[logs] Failed to emit log entries: {:?}", e);
                         break; // Window closed
                     }
                 }
-                _ => {}
+                Ok(_) => {
+                    // No new entries - check if file exists
+                    if !log_path.exists() {
+                        // File doesn't exist yet, that's fine
+                    }
+                }
+                Err(e) => {
+                    eprintln!("[logs] Error reading log: {:?}", e);
+                }
             }
 
             std::thread::sleep(std::time::Duration::from_millis(250));
         }
+        eprintln!("[logs] Watcher thread exiting");
     });
 
     Ok(())

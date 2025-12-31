@@ -34,6 +34,10 @@ export function LogsView() {
   const logsContainerRef = useRef<HTMLDivElement>(null);
   const unlistenRef = useRef<UnlistenFn | null>(null);
 
+  const sanitizeEventSegment = useCallback((value: string) => (
+    value.replace(/[^a-zA-Z0-9\-/:_]/g, "_")
+  ), []);
+
   const loadLogFiles = useCallback(async () => {
     if (!selectedProfileId) return;
     try {
@@ -96,7 +100,7 @@ export function LogsView() {
       setLogs([]);
 
       try {
-        const eventName = `log-entries-${selectedProfileId}`;
+        const eventName = `log-entries-${sanitizeEventSegment(selectedProfileId)}`;
         console.log("[logs] Setting up listener for event:", eventName);
         unlistenRef.current = await listen<LogEntry[]>(eventName, (event) => {
           console.log("[logs] Received", event.payload.length, "log entries");
