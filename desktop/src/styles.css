@@ -3263,6 +3263,13 @@ a {
   gap: 14px;
   z-index: 50;
   animation: slideUp 0.3s ease-out;
+  transition: opacity 0.35s ease, transform 0.35s ease;
+}
+
+.launch-status.is-hidden {
+  opacity: 0;
+  transform: translateY(10px);
+  pointer-events: none;
 }
 
 @keyframes slideUp {
@@ -3282,6 +3289,10 @@ a {
   border-radius: 50%;
   background: var(--accent-primary);
   animation: launchPulse 1.2s ease-in-out infinite;
+}
+
+.launch-status-dot.is-running {
+  background: var(--accent-success);
 }
 
 @keyframes launchPulse {

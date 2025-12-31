@@ -97,7 +97,9 @@ export function LogsView() {
 
       try {
         const eventName = `log-entries-${selectedProfileId}`;
+        console.log("[logs] Setting up listener for event:", eventName);
         unlistenRef.current = await listen<LogEntry[]>(eventName, (event) => {
+          console.log("[logs] Received", event.payload.length, "log entries");
           if (cancelled) return;
           setLogs(prev => {
             const newLogs = [...prev, ...event.payload];
@@ -108,7 +110,9 @@ export function LogsView() {
           });
         });
 
-        await invoke("start_log_watch", { profileId: selectedProfileId });
+        console.log("[logs] Starting log watch for profile:", selectedProfileId);
+        await invoke("start_log_watch", { profile_id: selectedProfileId });
+        console.log("[logs] Log watch started successfully");
         setWatching(true);
       } catch (err) {
         console.error("Failed to start log watch:", err);

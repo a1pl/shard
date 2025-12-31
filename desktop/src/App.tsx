@@ -1,4 +1,4 @@
-import { useEffect, useCallback, lazy, Suspense } from "react";
+import { useEffect, useCallback, useRef, useState, lazy, Suspense } from "react";
 import clsx from "clsx";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
@@ -72,6 +72,9 @@ function App() {
   } = useAppStore();
 
   const isOnline = useOnline();
+  const [launchHidden, setLaunchHidden] = useState(false);
+  const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const clearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Content modal state
   const contentKind = useAppStore((s) => s.activeTab);
@@ -104,14 +107,31 @@ function App() {
   useEffect(() => {
     const unlisten = listen<LaunchEvent>("launch-status", (event) => {
       setLaunchStatus(event.payload);
+      setLaunchHidden(false);
+      if (hideTimerRef.current) {
+        clearTimeout(hideTimerRef.current);
+        hideTimerRef.current = null;
+      }
+      if (clearTimerRef.current) {
+        clearTimeout(clearTimerRef.current);
+        clearTimerRef.current = null;
+      }
       if (event.payload.stage === "error") {
         notify("Launch failed", event.payload.message ?? "Unknown error");
+      }
+      if (event.payload.stage === "running") {
+        hideTimerRef.current = setTimeout(() => {
+          setLaunchHidden(true);
+          clearTimerRef.current = setTimeout(() => setLaunchStatus(null), 450);
+        }, 3500);
       }
       if (event.payload.stage === "done") {
         setTimeout(() => setLaunchStatus(null), 2500);
       }
     });
     return () => {
+      if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
+      if (clearTimerRef.current) clearTimeout(clearTimerRef.current);
       void unlisten.then((fn) => fn());
     };
   }, [setLaunchStatus, notify]);
@@ -400,8 +420,8 @@ function App() {
           </main>
 
           {launchStatus && (
-            <div className="launch-status">
-              <div className="launch-status-dot" />
+            <div className={clsx("launch-status", launchHidden && "is-hidden")}>
+              <div className={`launch-status-dot${launchStatus.stage === "running" ? " is-running" : ""}`} />
               <div className="launch-status-text">
                 {launchStatus.stage.charAt(0).toUpperCase() + launchStatus.stage.slice(1)}
                 {launchStatus.message && `: ${launchStatus.message}`}
