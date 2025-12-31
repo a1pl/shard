@@ -4,7 +4,7 @@ use shard::auth::{DeviceCode, request_device_code};
 use shard::config::{Config, load_config, save_config};
 use shard::content_store::{ContentStore, ContentType, Platform, SearchOptions, ContentItem, ContentVersion};
 use shard::java::{JavaInstallation, JavaValidation, detect_installations, validate_java_path, get_required_java_version, is_java_compatible};
-use shard::library::{Library, LibraryItem, LibraryFilter, LibraryItemInput, LibraryContentType, LibraryStats, Tag, ImportResult};
+use shard::library::{Library, LibraryItem, LibraryFilter, LibraryItemInput, LibraryContentType, LibraryStats, Tag, ImportResult, UnusedItemsSummary, PurgeResult};
 use shard::logs::{LogEntry, LogFile, LogWatcher, list_log_files, list_crash_reports, read_log_file, read_log_tail};
 use shard::minecraft::{LaunchPlan, prepare};
 use shard::ops::{finish_device_code_flow, parse_loader, resolve_input, resolve_launch_account};
@@ -1100,6 +1100,136 @@ pub fn fetch_fabric_versions_cmd() -> Result<Vec<String>, String> {
     Ok(versions)
 }
 
+/// Quilt loader version entry from the Quilt Meta API
+#[derive(Clone, Deserialize)]
+struct QuiltLoaderEntry {
+    version: String,
+}
+
+#[tauri::command]
+pub fn fetch_quilt_versions_cmd() -> Result<Vec<String>, String> {
+    let client = reqwest::blocking::Client::new();
+    let resp = client
+        .get("https://meta.quiltmc.org/v3/versions/loader")
+        .send()
+        .map_err(|e| format!("Failed to fetch Quilt versions: {}", e))?;
+
+    if !resp.status().is_success() {
+        return Err(format!("HTTP error: {}", resp.status()));
+    }
+
+    let entries: Vec<QuiltLoaderEntry> = resp
+        .json()
+        .map_err(|e| format!("Failed to parse Quilt versions: {}", e))?;
+
+    let versions: Vec<String> = entries.into_iter().map(|e| e.version).collect();
+    Ok(versions)
+}
+
+/// NeoForge version entry from the NeoForge API
+#[derive(Clone, Deserialize)]
+struct NeoForgeVersionsResponse {
+    versions: Vec<String>,
+}
+
+#[tauri::command]
+pub fn fetch_neoforge_versions_cmd(mc_version: Option<String>) -> Result<Vec<String>, String> {
+    let client = reqwest::blocking::Client::new();
+
+    // NeoForge API returns versions for a specific MC version
+    // For MC 1.20.1+, use the NeoForge API
+    let url = if let Some(mc) = mc_version {
+        format!("https://maven.neoforged.net/api/maven/versions/releases/net/neoforged/neoforge?filter={}.", mc.replace("1.", ""))
+    } else {
+        "https://maven.neoforged.net/api/maven/versions/releases/net/neoforged/neoforge".to_string()
+    };
+
+    let resp = client
+        .get(&url)
+        .send()
+        .map_err(|e| format!("Failed to fetch NeoForge versions: {}", e))?;
+
+    if !resp.status().is_success() {
+        return Err(format!("HTTP error: {}", resp.status()));
+    }
+
+    let data: NeoForgeVersionsResponse = resp
+        .json()
+        .map_err(|e| format!("Failed to parse NeoForge versions: {}", e))?;
+
+    // Sort versions in descending order (newest first)
+    let mut versions = data.versions;
+    versions.sort_by(|a, b| b.cmp(a));
+    Ok(versions)
+}
+
+/// Forge promotions response
+#[derive(Clone, Deserialize)]
+struct ForgePromotionsResponse {
+    promos: std::collections::HashMap<String, String>,
+}
+
+#[tauri::command]
+pub fn fetch_forge_versions_cmd(mc_version: Option<String>) -> Result<Vec<String>, String> {
+    let client = reqwest::blocking::Client::new();
+
+    // Forge uses a promotions endpoint that lists recommended/latest versions
+    let resp = client
+        .get("https://files.minecraftforge.net/maven/net/minecraftforge/forge/promotions_slim.json")
+        .send()
+        .map_err(|e| format!("Failed to fetch Forge promotions: {}", e))?;
+
+    if !resp.status().is_success() {
+        return Err(format!("HTTP error: {}", resp.status()));
+    }
+
+    let promos: ForgePromotionsResponse = resp
+        .json()
+        .map_err(|e| format!("Failed to parse Forge promotions: {}", e))?;
+
+    // Filter versions based on MC version if provided
+    let versions: Vec<String> = if let Some(mc) = mc_version {
+        // Look for versions matching this MC version
+        promos.promos.iter()
+            .filter(|(key, _)| key.starts_with(&mc))
+            .map(|(_, version)| {
+                // Key format: "1.20.1-recommended" or "1.20.1-latest"
+                // Value is the forge version number
+                format!("{}-{}", mc, version)
+            })
+            .collect()
+    } else {
+        // Return all unique MC-version combinations
+        let mut seen = std::collections::HashSet::new();
+        promos.promos.iter()
+            .filter_map(|(key, version)| {
+                // Extract MC version from key (e.g., "1.20.1" from "1.20.1-recommended")
+                let mc = key.split('-').next()?;
+                let full_version = format!("{}-{}", mc, version);
+                if seen.insert(full_version.clone()) {
+                    Some(full_version)
+                } else {
+                    None
+                }
+            })
+            .collect()
+    };
+
+    Ok(versions)
+}
+
+/// Fetch loader versions for any supported loader type
+#[tauri::command]
+pub fn fetch_loader_versions_cmd(loader_type: String, mc_version: Option<String>) -> Result<Vec<String>, String> {
+    match loader_type.to_lowercase().as_str() {
+        "fabric" => fetch_fabric_versions_cmd(),
+        "quilt" => fetch_quilt_versions_cmd(),
+        "neoforge" => fetch_neoforge_versions_cmd(mc_version),
+        "forge" => fetch_forge_versions_cmd(mc_version),
+        other => Err(format!("Unsupported loader type: {}", other)),
+    }
+}
+
 // ============================================================================
 // Java detection and validation commands
 // ============================================================================
@@ -1354,6 +1484,28 @@ pub fn get_data_path_cmd() -> Result<String, String> {
 pub fn get_storage_stats_cmd() -> Result<StorageStats, String> {
     let paths = load_paths()?;
     get_storage_stats(&paths).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn get_unused_items_cmd() -> Result<UnusedItemsSummary, String> {
+    let paths = load_paths()?;
+    let library = Library::from_paths(&paths).map_err(|e| e.to_string())?;
+    library.get_unused_items().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn purge_unused_items_cmd(content_types: Vec<String>) -> Result<PurgeResult, String> {
+    let paths = load_paths()?;
+    let library = Library::from_paths(&paths).map_err(|e| e.to_string())?;
+
+    // Convert string content types to LibraryContentType
+    let types: Vec<LibraryContentType> = content_types
+        .iter()
+        .filter_map(|s| LibraryContentType::from_str(s))
+        .collect();
+
+    // Always delete files from store when purging
+    library.purge_unused_items(&paths, &types, true).map_err(|e| e.to_string())
 }
 
 #[tauri::command]

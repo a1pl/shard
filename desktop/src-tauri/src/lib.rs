@@ -59,6 +59,10 @@ pub fn run() {
             // Version fetching commands
             commands::fetch_minecraft_versions_cmd,
             commands::fetch_fabric_versions_cmd,
+            commands::fetch_quilt_versions_cmd,
+            commands::fetch_neoforge_versions_cmd,
+            commands::fetch_forge_versions_cmd,
+            commands::fetch_loader_versions_cmd,
             // Java detection commands
             commands::detect_java_installations_cmd,
             commands::validate_java_path_cmd,
@@ -84,6 +88,8 @@ pub fn run() {
             // Settings and storage commands
             commands::get_data_path_cmd,
             commands::get_storage_stats_cmd,
+            commands::get_unused_items_cmd,
+            commands::purge_unused_items_cmd,
             commands::get_auto_update_enabled_cmd,
             commands::set_auto_update_enabled_cmd,
             // Update checking commands
