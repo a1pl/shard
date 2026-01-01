@@ -1,5 +1,6 @@
 {
   "build": {
+    "beforeBuildCommand": "bash ../scripts/compile-liquid-glass-icon.sh && bun run build",
     "beforeBundleCommand": "bash ../scripts/compile-liquid-glass-icon.sh"
   },
   "bundle": {
