@@ -161,6 +161,7 @@ jobs:
         run: |
           mkdir -p renamed-artifacts
           # Find and rename desktop artifacts with clear names
+          # Note: tauri-action uses workspace root target dir, not desktop/src-tauri/target
           if [ "${{ matrix.platform }}" = "macos-latest" ]; then
             find target/${{ matrix.target }}/release/bundle -name "*.dmg" -exec cp {} renamed-artifacts/shard-launcher-${{ matrix.name }}.dmg \; 2>/dev/null || true
           elif [ "${{ matrix.platform }}" = "windows-latest" ]; then
