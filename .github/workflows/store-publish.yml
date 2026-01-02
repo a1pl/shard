@@ -493,7 +493,8 @@ jobs:
 
           # Check if PR already exists before trying to create
           FORK_OWNER="${WINGET_FORK%%/*}"
-          EXISTING_PR=$(gh pr list --repo "$WINGET_BASE" --head "${FORK_OWNER}:$BRANCH" --json number,url --jq '.[0]' 2>/dev/null || true)
+          # Note: gh pr list uses just branch name, not owner:branch format
+          EXISTING_PR=$(gh pr list --repo "$WINGET_BASE" --head "$BRANCH" --json number,url --jq '.[0]' 2>/dev/null || true)
           if [ -n "$EXISTING_PR" ] && [ "$EXISTING_PR" != "null" ]; then
             PR_URL=$(echo "$EXISTING_PR" | jq -r '.url')
             PR_NUM=$(echo "$EXISTING_PR" | jq -r '.number')
