@@ -20,6 +20,7 @@ hex = "0.4.3"
 reqwest = { version = "0.12.28", default-features = false, features = ["blocking", "json", "multipart", "rustls-tls"] }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.148"
+semver = "1.0.27"
 sha1 = "0.10.6"
 sha2 = "0.10.9"
 shell-words = "1.1.1"

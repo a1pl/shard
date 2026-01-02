@@ -249,7 +249,7 @@ jobs:
             }
           };
 
-          fs.writeFileSync("latest.json", JSON.stringify(manifest, null, 2) + "\\n");
+          fs.writeFileSync("latest.json", JSON.stringify(manifest, null, 2) + "\n");
           NODE
 
       - name: Generate checksums

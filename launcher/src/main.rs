@@ -1,5 +1,8 @@
 use anyhow::{Context, Result, bail};
 use clap::{Parser, Subcommand, ValueEnum};
+use reqwest::blocking::Client;
+use semver::Version;
+use serde::Deserialize;
 use shard::accounts::{load_accounts, remove_account, save_accounts, set_active};
 use shard::auth::request_device_code;
 use shard::config::{load_config, save_config};
@@ -29,6 +32,7 @@ use shard::template::{
     delete_template, init_builtin_templates, list_templates, load_template, save_template,
     ContentSource, Template, TemplateLoader, TemplateRuntime,
 };
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -37,6 +41,23 @@ use std::time::Duration;
 struct Cli {
     #[command(subcommand)]
     command: Command,
+}
+
+const DEFAULT_UPDATER_ENDPOINT: &str =
+    "https://github.com/th0rgal/shard/releases/latest/download/latest.json";
+
+#[derive(Debug, Deserialize)]
+struct ReleaseManifestPlatform {
+    url: String,
+    signature: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct ReleaseManifest {
+    version: String,
+    notes: Option<String>,
+    pub_date: Option<String>,
+    platforms: HashMap<String, ReleaseManifestPlatform>,
 }
 
 #[derive(Subcommand, Debug)]
@@ -97,6 +118,11 @@ enum Command {
     Config {
         #[command(subcommand)]
         command: ConfigCommand,
+    },
+    /// Desktop app update checks
+    AppUpdate {
+        #[command(subcommand)]
+        command: AppUpdateCommand,
     },
     /// Prepare and launch a profile
     Launch {
@@ -457,6 +483,25 @@ enum ConfigCommand {
 }
 
 #[derive(Subcommand, Debug)]
+enum AppUpdateCommand {
+    /// Check the desktop app update manifest
+    Check {
+        /// Override the updater manifest endpoint
+        #[arg(long)]
+        endpoint: Option<String>,
+        /// Override the platform target (default: current platform)
+        #[arg(long)]
+        platform: Option<String>,
+        /// Override the current app version used for comparison
+        #[arg(long)]
+        current: Option<String>,
+        /// Print the raw manifest JSON
+        #[arg(long)]
+        print_manifest: bool,
+    },
+}
+
+#[derive(Subcommand, Debug)]
 enum LibraryCommand {
     /// List library items
     List {
@@ -750,6 +795,7 @@ fn run() -> Result<()> {
                 println!("saved CurseForge API key");
             }
         },
+        Command::AppUpdate { command } => handle_app_update_command(command)?,
         Command::Launch {
             profile,
             account,
@@ -772,6 +818,117 @@ fn run() -> Result<()> {
     }
 
     Ok(())
+}
+
+fn handle_app_update_command(command: AppUpdateCommand) -> Result<()> {
+    match command {
+        AppUpdateCommand::Check {
+            endpoint,
+            platform,
+            current,
+            print_manifest,
+        } => {
+            let endpoint = endpoint.unwrap_or_else(|| DEFAULT_UPDATER_ENDPOINT.to_string());
+            let target = match platform {
+                Some(value) => value,
+                None => updater_target()
+                    .context("unsupported OS/arch for updater target; use --platform to override")?,
+            };
+
+            let client = Client::builder()
+                .user_agent(format!("ShardCLI/{}", env!("CARGO_PKG_VERSION")))
+                .build()?;
+
+            let response = client
+                .get(&endpoint)
+                .send()
+                .with_context(|| format!("failed to GET {endpoint}"))?;
+
+            let status = response.status();
+            let headers = response.headers().clone();
+            let body = response.bytes()?;
+
+            println!("manifest: {endpoint}");
+            println!("status: {status}");
+            if let Some(content_type) = headers.get(reqwest::header::CONTENT_TYPE) {
+                if let Ok(value) = content_type.to_str() {
+                    println!("content-type: {value}");
+                }
+            }
+
+            if !status.is_success() {
+                bail!("updater manifest request failed ({status})");
+            }
+
+            if print_manifest {
+                println!("{}", String::from_utf8_lossy(&body));
+            }
+
+            let value: serde_json::Value = serde_json::from_slice(&body).map_err(|err| {
+                let tail = String::from_utf8_lossy(&body[body.len().saturating_sub(120)..]);
+                anyhow::anyhow!("failed to parse updater manifest: {err}. tail: {tail:?}")
+            })?;
+            let manifest: ReleaseManifest =
+                serde_json::from_value(value).context("updater manifest format error")?;
+
+            println!("target: {target}");
+            println!("latest version: {}", manifest.version);
+            let current_version =
+                current.unwrap_or_else(|| env!("CARGO_PKG_VERSION").to_string());
+            let latest_semver = parse_version(&manifest.version)?;
+            let current_semver = parse_version(&current_version)?;
+            let update_available = latest_semver > current_semver;
+            println!("current version: {current_semver}");
+            println!(
+                "update available: {}",
+                if update_available { "yes" } else { "no" }
+            );
+            if let Some(notes) = manifest.notes.as_ref().filter(|value| !value.trim().is_empty())
+            {
+                println!("notes: {notes}");
+            }
+            if let Some(pub_date) = manifest.pub_date.as_deref() {
+                println!("pub date: {pub_date}");
+            }
+
+            let platform = manifest.platforms.get(&target).with_context(|| {
+                let available = manifest
+                    .platforms
+                    .keys()
+                    .cloned()
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                format!("target {target} not found in manifest; available: {available}")
+            })?;
+            println!("download url: {}", platform.url);
+            println!("signature: {}", platform.signature);
+        }
+    }
+    Ok(())
+}
+
+fn updater_target() -> Option<String> {
+    let os = match std::env::consts::OS {
+        "linux" => "linux",
+        "macos" => "darwin",
+        "windows" => "windows",
+        _ => return None,
+    };
+
+    let arch = match std::env::consts::ARCH {
+        "x86" => "i686",
+        "x86_64" => "x86_64",
+        "arm" => "armv7",
+        "aarch64" => "aarch64",
+        _ => return None,
+    };
+
+    Some(format!("{os}-{arch}"))
+}
+
+fn parse_version(value: &str) -> Result<Version> {
+    let trimmed = value.trim().trim_start_matches('v');
+    Version::parse(trimmed).with_context(|| format!("invalid version: {value}"))
 }
 
 fn handle_pack_command(paths: &Paths, kind: ContentKind, command: PackCommand) -> Result<()> {

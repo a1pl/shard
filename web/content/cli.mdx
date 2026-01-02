@@ -187,6 +187,20 @@ shard config set-client-secret <client-secret>
 shard config set-curseforge-key <api-key>
 ```
 
+### App Updates
+
+```bash
+# Check the desktop app update manifest
+shard app-update check
+
+# Compare against a specific version (useful for testing updates)
+shard app-update check --current 0.1.5
+
+# Override the manifest endpoint or platform
+shard app-update check --endpoint https://github.com/th0rgal/shard/releases/latest/download/latest.json
+shard app-update check --platform darwin-aarch64
+```
+
 ### Logs
 
 ```bash

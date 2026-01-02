@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <component type="desktop-application">
-  <id>sh.shard.launcher</id>
+  <id>md.thomas.shard.launcher</id>
   <name>Shard Launcher</name>
   <summary>A minimal, content-addressed Minecraft launcher</summary>
   <metadata_license>MIT</metadata_license>
@@ -23,7 +23,7 @@
       <li>CLI-first design - everything can be scripted</li>
     </ul>
   </description>
-  <launchable type="desktop-id">sh.shard.launcher.desktop</launchable>
+  <launchable type="desktop-id">md.thomas.shard.launcher.desktop</launchable>
   <url type="homepage">https://shard.thomas.md</url>
   <url type="bugtracker">https://github.com/th0rgal/shard/issues</url>
   <url type="vcs-browser">https://github.com/th0rgal/shard</url>

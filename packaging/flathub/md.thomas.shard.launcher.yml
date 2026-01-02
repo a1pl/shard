@@ -1,4 +1,4 @@
-id: sh.shard.launcher
+id: md.thomas.shard.launcher
 runtime: org.gnome.Platform
 runtime-version: '46'
 sdk: org.gnome.Sdk
@@ -41,16 +41,16 @@ modules:
       # Install binary
       - install -Dm755 usr/bin/shard-launcher /app/bin/shard-launcher
       # Install desktop file
-      - install -Dm644 usr/share/applications/*.desktop /app/share/applications/sh.shard.launcher.desktop
+      - install -Dm644 usr/share/applications/*.desktop /app/share/applications/md.thomas.shard.launcher.desktop
       # Install icons
       - |
         for size in 32 128 256 512; do
           if [ -f "usr/share/icons/hicolor/${size}x${size}/apps/"*.png ]; then
             install -Dm644 "usr/share/icons/hicolor/${size}x${size}/apps/"*.png \
-              "/app/share/icons/hicolor/${size}x${size}/apps/sh.shard.launcher.png"
+              "/app/share/icons/hicolor/${size}x${size}/apps/md.thomas.shard.launcher.png"
           fi
         done
     post-install:
       # Fix desktop file for Flatpak
-      - sed -i 's|Exec=.*|Exec=shard-launcher|' /app/share/applications/sh.shard.launcher.desktop
-      - sed -i 's|Icon=.*|Icon=sh.shard.launcher|' /app/share/applications/sh.shard.launcher.desktop
+      - sed -i 's|Exec=.*|Exec=shard-launcher|' /app/share/applications/md.thomas.shard.launcher.desktop
+      - sed -i 's|Icon=.*|Icon=md.thomas.shard.launcher|' /app/share/applications/md.thomas.shard.launcher.desktop
