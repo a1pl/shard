@@ -273,6 +273,13 @@ jobs:
 
           git clone "https://x-access-token:${GH_TOKEN}@github.com/${WINGET_FORK}.git" winget-pkgs
           cd winget-pkgs
+
+          # Sync fork with upstream
+          git remote add upstream "https://github.com/${WINGET_BASE}.git"
+          git fetch upstream master
+          git checkout -B master upstream/master
+          git push origin master --force
+
           BRANCH="shardlauncher-${VERSION}"
           git checkout -b "$BRANCH"
 
