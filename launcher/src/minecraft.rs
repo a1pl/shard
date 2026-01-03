@@ -39,7 +39,8 @@ pub struct LaunchPlan {
 pub fn prepare(paths: &Paths, profile: &Profile, account: &LaunchAccount) -> Result<LaunchPlan> {
     let instance_dir = materialize_instance(paths, profile)?;
 
-    let version_id = resolve_version_id(paths, &profile.mc_version, profile.loader.as_ref())?;
+    let java_path = profile.runtime.java.as_deref();
+    let version_id = resolve_version_id(paths, &profile.mc_version, profile.loader.as_ref(), java_path)?;
     let resolved = resolve_version(paths, &version_id)?;
     let version = resolved.merged;
 
@@ -132,14 +133,14 @@ pub fn launch(paths: &Paths, profile: &Profile, account: &LaunchAccount) -> Resu
     Ok(())
 }
 
-fn resolve_version_id(paths: &Paths, mc_version: &str, loader: Option<&Loader>) -> Result<String> {
+fn resolve_version_id(paths: &Paths, mc_version: &str, loader: Option<&Loader>, java: Option<&str>) -> Result<String> {
     match loader {
         None => Ok(mc_version.to_string()),
         Some(loader) => match loader.loader_type.as_str() {
             "fabric" => ensure_fabric_profile(paths, mc_version, &loader.version),
             "quilt" => ensure_quilt_profile(paths, mc_version, &loader.version),
-            "neoforge" => ensure_neoforge_profile(paths, mc_version, &loader.version),
-            "forge" => ensure_forge_profile(paths, mc_version, &loader.version),
+            "neoforge" => ensure_neoforge_profile(paths, mc_version, &loader.version, java),
+            "forge" => ensure_forge_profile(paths, mc_version, &loader.version, java),
             other => bail!("unsupported loader type: {other}"),
         },
     }
@@ -260,7 +261,7 @@ fn resolve_neoforge_latest_version(mc_version: &str) -> Result<String> {
         .context("no neoforge versions found for this minecraft version")
 }
 
-fn ensure_neoforge_profile(paths: &Paths, mc_version: &str, loader_version: &str) -> Result<String> {
+fn ensure_neoforge_profile(paths: &Paths, mc_version: &str, loader_version: &str, java: Option<&str>) -> Result<String> {
     // Resolve "latest" to actual version number
     let resolved_version = if loader_version.eq_ignore_ascii_case("latest") {
         resolve_neoforge_latest_version(mc_version)?
@@ -289,7 +290,7 @@ fn ensure_neoforge_profile(paths: &Paths, mc_version: &str, loader_version: &str
 
     // Run the installer to process libraries and generate SRG jars.
     // NeoForge installer creates the version with ID "neoforge-{version}" which matches our format.
-    run_forge_installer(paths, &installer_path)?;
+    run_forge_installer(paths, &installer_path, java)?;
 
     // Verify the installer created the expected version
     if !target.exists() {
@@ -321,7 +322,7 @@ fn resolve_forge_latest_version(mc_version: &str) -> Result<String> {
     bail!("no forge version found for minecraft {}", mc_version)
 }
 
-fn ensure_forge_profile(paths: &Paths, mc_version: &str, loader_version: &str) -> Result<String> {
+fn ensure_forge_profile(paths: &Paths, mc_version: &str, loader_version: &str, java: Option<&str>) -> Result<String> {
     // Resolve "latest" to actual version number
     let resolved_loader = if loader_version.eq_ignore_ascii_case("latest") {
         resolve_forge_latest_version(mc_version)?
@@ -354,11 +355,14 @@ fn ensure_forge_profile(paths: &Paths, mc_version: &str, loader_version: &str) -
     // Run the installer to process libraries and generate SRG jars.
     // The installer creates the version at {mc_version}-forge-{forge_version}
     // (e.g., "1.20.1-forge-47.4.10").
-    run_forge_installer(paths, &installer_path)?;
+    run_forge_installer(paths, &installer_path, java)?;
 
     // The installer created a version with its own ID format.
     // Read that version and copy it with our ID format.
-    let installer_id = format!("{mc_version}-forge-{}", version_id.split('-').last().unwrap_or(&version_id));
+    // Use splitn(2, '-') to handle legacy Forge version formats with multiple dashes
+    // (e.g., "1.7.10-10.13.4.1614-1.7.10" should extract "10.13.4.1614-1.7.10")
+    let forge_version = version_id.splitn(2, '-').nth(1).unwrap_or(&version_id);
+    let installer_id = format!("{mc_version}-forge-{forge_version}");
     let installer_json_path = paths.minecraft_version_json(&installer_id);
 
     let profile_json = fs::read_to_string(&installer_json_path)
@@ -397,8 +401,8 @@ fn extract_version_json_from_jar(jar_path: &Path, json_name: &str) -> Result<Str
 
 /// Run the Forge/NeoForge installer to process libraries and generate SRG jars.
 /// The installer creates the necessary processed artifacts that aren't available via Maven.
-fn run_forge_installer(paths: &Paths, installer_path: &Path) -> Result<()> {
-    let java = resolve_java(None);
+fn run_forge_installer(paths: &Paths, installer_path: &Path, java: Option<&str>) -> Result<()> {
+    let java = resolve_java(java);
 
     // Derive minecraft_dir from minecraft_versions path
     let minecraft_dir = paths
