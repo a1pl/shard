@@ -14,6 +14,7 @@ import {
   type DragStartEvent,
 } from "@dnd-kit/core";
 import { useAppStore } from "../store";
+import { LoaderIcon, type LoaderType } from "./LoaderIcon";
 import type { ProfileFolder } from "../types";
 
 // Render a skin head from the skin texture using canvas
@@ -296,7 +297,6 @@ export function Sidebar({
     moveProfileToFolder,
     setFavoriteProfile,
     renameProfileInOrganization,
-    loadProfileOrganization,
     syncProfileOrganization,
     loadProfiles,
     notify,
@@ -314,6 +314,8 @@ export function Sidebar({
   const addMenuRef = useRef<HTMLDivElement>(null);
   const contextMenuRef = useRef<HTMLDivElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
+  // Track adjusted position to avoid DOM manipulation that's lost on re-render
+  const [adjustedMenuPos, setAdjustedMenuPos] = useState<{ x: number; y: number } | null>(null);
 
   // Configure drag sensors with activation constraint to distinguish from clicks
   const sensors = useSensors(
@@ -324,11 +326,7 @@ export function Sidebar({
     })
   );
 
-  // Load organization on mount and sync when profiles change
-  useEffect(() => {
-    loadProfileOrganization();
-  }, [loadProfileOrganization]);
-
+  // Sync organization when profiles change (organization is loaded in App.tsx on startup)
   useEffect(() => {
     syncProfileOrganization();
   }, [profiles, syncProfileOrganization]);
@@ -336,19 +334,61 @@ export function Sidebar({
   // Close menus on outside click
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
-      if (profileMenuRef.current && !profileMenuRef.current.contains(e.target as Node)) {
+      const target = e.target as HTMLElement;
+      // Don't close menus if clicking inside a modal (e.g., confirm dialog)
+      if (target.closest(".modal-backdrop")) {
+        return;
+      }
+      // Don't close profile menu if clicking inside the context menu (it's rendered in a portal)
+      const isInsideContextMenu = contextMenuRef.current?.contains(target);
+      if (profileMenuRef.current && !profileMenuRef.current.contains(target) && !isInsideContextMenu) {
         setShowProfileMenu(false);
       }
-      if (addMenuRef.current && !addMenuRef.current.contains(e.target as Node)) {
+      if (addMenuRef.current && !addMenuRef.current.contains(target) && !isInsideContextMenu) {
         setShowAddMenu(false);
       }
-      if (contextMenuRef.current && !contextMenuRef.current.contains(e.target as Node)) {
+      if (contextMenuRef.current && !contextMenuRef.current.contains(target)) {
         setContextMenuTarget(null);
       }
     };
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
   }, [setContextMenuTarget]);
+
+  // Adjust context menu position to stay within viewport
+  useEffect(() => {
+    if (contextMenuTarget && contextMenuRef.current) {
+      const menu = contextMenuRef.current;
+      const rect = menu.getBoundingClientRect();
+      const viewportWidth = window.innerWidth;
+      const viewportHeight = window.innerHeight;
+
+      let newX = contextMenuTarget.x;
+      let newY = contextMenuTarget.y;
+
+      // Check right edge
+      if (rect.right > viewportWidth) {
+        newX = viewportWidth - rect.width - 8;
+      }
+      // Check bottom edge
+      if (rect.bottom > viewportHeight) {
+        newY = viewportHeight - rect.height - 8;
+      }
+      // Ensure minimum position
+      newX = Math.max(8, newX);
+      newY = Math.max(8, newY);
+
+      // Store adjusted position in state to survive re-renders
+      if (newX !== contextMenuTarget.x || newY !== contextMenuTarget.y) {
+        setAdjustedMenuPos({ x: newX, y: newY });
+      } else {
+        setAdjustedMenuPos(null);
+      }
+    } else {
+      // Clear adjusted position when context menu closes
+      setAdjustedMenuPos(null);
+    }
+  }, [contextMenuTarget]);
 
   // Focus input when editing starts
   useEffect(() => {
@@ -408,7 +448,7 @@ export function Sidebar({
     const newName = renamingProfileName.trim();
     if (newName && newName !== renamingProfileId) {
       try {
-        await invoke("rename_profile_cmd", { id: renamingProfileId, new_id: newName });
+        await invoke("rename_profile_cmd", { id: renamingProfileId, newId: newName });
         // Update organization before reloading (preserves folder membership and favorite)
         renameProfileInOrganization(renamingProfileId, newName);
         // Update selection if we renamed the selected profile
@@ -471,8 +511,9 @@ export function Sidebar({
   const getProfileInfo = () => {
     if (!profile) return null;
     const version = profile.mcVersion || "Unknown";
-    const loader = profile.loader?.type || "Vanilla";
-    return { version, loader };
+    const loaderType = (profile.loader?.type?.toLowerCase() || null) as LoaderType;
+    const loaderLabel = profile.loader?.type || "Vanilla";
+    return { version, loaderType, loaderLabel };
   };
 
   const profileInfo = getProfileInfo();
@@ -543,10 +584,7 @@ export function Sidebar({
           data-tauri-drag-region="false"
         >
           <div className="profile-context-icon">
-            <svg width="18" height="18" viewBox="0 0 20 20" fill="none">
-              <path d="M3 7l7-4 7 4v6l-7 4-7-4V7z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
-              <path d="M10 11V3M10 11l7-4M10 11l-7-4" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
-            </svg>
+            <LoaderIcon loader={profileInfo?.loaderType ?? null} size={18} />
           </div>
           {selectedProfileId ? (
             <>
@@ -554,7 +592,7 @@ export function Sidebar({
                 <span className="profile-context-name">{selectedProfileId}</span>
                 {profileInfo && (
                   <span className="profile-context-meta">
-                    {profileInfo.version} · {profileInfo.loader}
+                    {profileInfo.version} · {profileInfo.loaderLabel}
                   </span>
                 )}
               </div>
@@ -749,7 +787,10 @@ export function Sidebar({
         <div
           ref={contextMenuRef}
           className="context-menu"
-          style={{ left: contextMenuTarget.x, top: contextMenuTarget.y }}
+          style={{
+            left: adjustedMenuPos?.x ?? contextMenuTarget.x,
+            top: adjustedMenuPos?.y ?? contextMenuTarget.y,
+          }}
         >
           {contextMenuTarget.type === "profile" && (
             <>

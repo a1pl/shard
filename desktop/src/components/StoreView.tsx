@@ -168,11 +168,11 @@ export function StoreView() {
 
     try {
       const data = await invoke<StoreVersion[]>("store_get_versions_cmd", {
-        project_id: project.id,
+        projectId: project.id,
         platform: project.platform,
-        game_version: profile?.mcVersion ?? null,
+        gameVersion: profile?.mcVersion ?? null,
         loader: profile?.loader?.type ?? null,
-        profile_id: selectedProfileId ?? null,
+        profileId: selectedProfileId ?? null,
       });
       setVersions(data);
     } catch (err) {
@@ -214,11 +214,11 @@ export function StoreView() {
     try {
       // Fetch versions for this project
       const versions = await invoke<StoreVersion[]>("store_get_versions_cmd", {
-        project_id: project.id,
+        projectId: project.id,
         platform: project.platform,
-        game_version: profile?.mcVersion ?? null,
+        gameVersion: profile?.mcVersion ?? null,
         loader: profile?.loader?.type ?? null,
-        profile_id: selectedProfileId,
+        profileId: selectedProfileId,
       });
 
       if (versions.length === 0) {

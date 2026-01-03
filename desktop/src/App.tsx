@@ -66,6 +66,7 @@ function App() {
     loadProfile,
     loadAccounts,
     loadConfig,
+    loadProfileOrganization,
     notify,
     runAction,
     getActiveAccount,
@@ -87,6 +88,9 @@ function App() {
   // Initial load
   useEffect(() => {
     const loadInitial = async () => {
+      // Load organization first to avoid race condition with sync
+      // (sync runs when profiles change, so org must be loaded before profiles)
+      await loadProfileOrganization();
       await Promise.all([loadProfiles(), loadAccounts(), loadConfig()]);
       // Precache version data and fetch real skin URL in background (don't await - non-blocking)
       void precacheMcVersions();
@@ -94,7 +98,7 @@ function App() {
       void prefetchActiveAccountSkin();
     };
     void loadInitial();
-  }, [loadProfiles, loadAccounts, loadConfig, precacheMcVersions, precacheFabricVersions, prefetchActiveAccountSkin]);
+  }, [loadProfiles, loadAccounts, loadConfig, loadProfileOrganization, precacheMcVersions, precacheFabricVersions, prefetchActiveAccountSkin]);
 
   // Load profile when selection changes
   useEffect(() => {
@@ -270,8 +274,8 @@ function App() {
     if (!selectedProfileId) return;
     await runAction(async () => {
       await invoke<Profile>("library_add_to_profile_cmd", {
-        profile_id: selectedProfileId,
-        item_id: item.id,
+        profileId: selectedProfileId,
+        itemId: item.id,
       });
       await loadProfile(selectedProfileId);
       setActiveModal(null);
@@ -289,7 +293,7 @@ function App() {
       onConfirm: async () => {
         setConfirmState(null);
         await runAction(async () => {
-          const payload = { profile_id: selectedProfileId, target: item.hash };
+          const payload = { profileId: selectedProfileId, target: item.hash };
           if (activeTab === "mods") await invoke("remove_mod_cmd", payload);
           else if (activeTab === "resourcepacks") await invoke("remove_resourcepack_cmd", payload);
           else await invoke("remove_shaderpack_cmd", payload);
@@ -328,7 +332,7 @@ function App() {
   const handleOpenInstance = useCallback(async () => {
     if (!selectedProfileId) return;
     try {
-      const path = await invoke<string>("instance_path_cmd", { profile_id: selectedProfileId });
+      const path = await invoke<string>("instance_path_cmd", { profileId: selectedProfileId });
       try {
         await revealItemInDir(path);
       } catch {

@@ -18,7 +18,12 @@ import type {
   AccountInfo,
 } from "../types";
 
-const PROFILE_ORG_KEY = "shard:profile-organization";
+// Helper to persist profile organization to disk via Tauri
+const saveProfileOrg = (org: ProfileOrganization) => {
+  invoke("save_profile_organization_cmd", { organization: org }).catch((err) => {
+    console.error("Failed to save profile organization:", err);
+  });
+};
 
 interface AppState {
   // Core data
@@ -91,7 +96,7 @@ interface AppState {
   reorderProfileInFolder: (profileId: string, folderId: string | null, targetIndex: number) => void;
   setFavoriteProfile: (profileId: string | null) => void;
   renameProfileInOrganization: (oldId: string, newId: string) => void;
-  loadProfileOrganization: () => void;
+  loadProfileOrganization: () => Promise<void>;
   syncProfileOrganization: () => void;
 
   // Async actions
@@ -119,7 +124,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   activeAccountSkinUrl: null,
   config: null,
   profileFilter: "",
-  activeTab: "mods",
+  activeTab: "resourcepacks",
   sidebarView: "profiles",
   activeModal: null,
   toast: null,
@@ -170,7 +175,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     const newFolder: ProfileFolder = { id, name, profiles: [], collapsed: false };
     const newOrg = { ...profileOrg, folders: [...profileOrg.folders, newFolder] };
     set({ profileOrg: newOrg });
-    localStorage.setItem(PROFILE_ORG_KEY, JSON.stringify(newOrg));
+    saveProfileOrg(newOrg);
     return id;
   },
 
@@ -181,7 +186,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       folders: profileOrg.folders.map((f) => (f.id === folderId ? { ...f, name } : f)),
     };
     set({ profileOrg: newOrg });
-    localStorage.setItem(PROFILE_ORG_KEY, JSON.stringify(newOrg));
+    saveProfileOrg(newOrg);
   },
 
   deleteFolder: (folderId: string) => {
@@ -192,7 +197,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       ungrouped: [...profileOrg.ungrouped, ...(folder?.profiles ?? [])],
     };
     set({ profileOrg: newOrg });
-    localStorage.setItem(PROFILE_ORG_KEY, JSON.stringify(newOrg));
+    saveProfileOrg(newOrg);
   },
 
   toggleFolderCollapsed: (folderId: string) => {
@@ -204,7 +209,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       ),
     };
     set({ profileOrg: newOrg });
-    localStorage.setItem(PROFILE_ORG_KEY, JSON.stringify(newOrg));
+    saveProfileOrg(newOrg);
   },
 
   moveProfileToFolder: (profileId: string, folderId: string | null) => {
@@ -227,7 +232,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
     const newOrg = { ...profileOrg, folders: newFolders, ungrouped: newUngrouped };
     set({ profileOrg: newOrg });
-    localStorage.setItem(PROFILE_ORG_KEY, JSON.stringify(newOrg));
+    saveProfileOrg(newOrg);
   },
 
   reorderProfileInFolder: (profileId: string, folderId: string | null, targetIndex: number) => {
@@ -255,14 +260,14 @@ export const useAppStore = create<AppState>((set, get) => ({
 
     const newOrg = { ...profileOrg, folders: newFolders, ungrouped: newUngrouped };
     set({ profileOrg: newOrg });
-    localStorage.setItem(PROFILE_ORG_KEY, JSON.stringify(newOrg));
+    saveProfileOrg(newOrg);
   },
 
   setFavoriteProfile: (profileId: string | null) => {
     const { profileOrg } = get();
     const newOrg = { ...profileOrg, favoriteProfile: profileId };
     set({ profileOrg: newOrg });
-    localStorage.setItem(PROFILE_ORG_KEY, JSON.stringify(newOrg));
+    saveProfileOrg(newOrg);
   },
 
   renameProfileInOrganization: (oldId: string, newId: string) => {
@@ -283,17 +288,15 @@ export const useAppStore = create<AppState>((set, get) => ({
       favoriteProfile: newFavorite,
     };
     set({ profileOrg: newOrg });
-    localStorage.setItem(PROFILE_ORG_KEY, JSON.stringify(newOrg));
+    saveProfileOrg(newOrg);
   },
 
-  loadProfileOrganization: () => {
+  loadProfileOrganization: async () => {
     try {
-      const stored = localStorage.getItem(PROFILE_ORG_KEY);
-      if (stored) {
-        set({ profileOrg: JSON.parse(stored) });
-      }
-    } catch {
-      // Ignore parse errors
+      const org = await invoke<ProfileOrganization>("load_profile_organization_cmd");
+      set({ profileOrg: org });
+    } catch (err) {
+      console.error("Failed to load profile organization:", err);
     }
   },
 
@@ -313,18 +316,25 @@ export const useAppStore = create<AppState>((set, get) => ({
     }));
     const validUngrouped = profileOrg.ungrouped.filter((p) => profiles.includes(p));
 
+    // Validate favorite profile still exists
+    const validFavorite = profileOrg.favoriteProfile && profiles.includes(profileOrg.favoriteProfile)
+      ? profileOrg.favoriteProfile
+      : null;
+
     const newOrg = {
       folders: validFolders,
       ungrouped: [...validUngrouped, ...newProfiles],
+      favoriteProfile: validFavorite,
     };
 
     if (
       newProfiles.length > 0 ||
       validFolders.some((f, i) => f.profiles.length !== profileOrg.folders[i]?.profiles.length) ||
-      validUngrouped.length !== profileOrg.ungrouped.length
+      validUngrouped.length !== profileOrg.ungrouped.length ||
+      validFavorite !== profileOrg.favoriteProfile
     ) {
       set({ profileOrg: newOrg });
-      localStorage.setItem(PROFILE_ORG_KEY, JSON.stringify(newOrg));
+      saveProfileOrg(newOrg);
     }
   },
 
