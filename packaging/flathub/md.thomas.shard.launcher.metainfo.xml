@@ -2,25 +2,25 @@
 <component type="desktop-application">
   <id>md.thomas.shard.launcher</id>
   <name>Shard Launcher</name>
-  <summary>A minimal, content-addressed Minecraft launcher</summary>
-  <metadata_license>MIT</metadata_license>
+  <summary>A minimal, modern Minecraft launcher</summary>
+  <metadata_license>CC0-1.0</metadata_license>
   <project_license>MIT</project_license>
   <developer id="md.thomas">
     <name>Thomas Marchand</name>
   </developer>
   <description>
     <p>
-      Shard is a minimal, clean, CLI-first Minecraft launcher focused on stability,
-      reproducibility, and low duplication.
+      Shard Launcher is a modern, minimal Minecraft launcher with a clean interface
+      focused on stability and ease of use.
     </p>
     <p>Features:</p>
     <ul>
-      <li>Content-addressed storage for mods and resource packs - no duplicates</li>
-      <li>Declarative profiles for reproducible setups</li>
+      <li>Intuitive profile management with drag-and-drop organization</li>
+      <li>Built-in mod browser for Modrinth and CurseForge</li>
+      <li>3D skin viewer with cape support</li>
       <li>Support for Fabric, Forge, Quilt, and NeoForge</li>
-      <li>Modrinth and CurseForge integration</li>
-      <li>Multiple Microsoft account support</li>
-      <li>CLI-first design - everything can be scripted</li>
+      <li>Smart storage that automatically deduplicates mods across profiles</li>
+      <li>Multiple Microsoft account support with easy switching</li>
     </ul>
   </description>
   <launchable type="desktop-id">md.thomas.shard.launcher.desktop</launchable>
@@ -39,16 +39,36 @@
     <keyword>fabric</keyword>
     <keyword>forge</keyword>
   </keywords>
-  <screenshots>
-    <!-- Add screenshots when available -->
-  </screenshots>
   <content_rating type="oars-1.1">
     <content_attribute id="social-chat">moderate</content_attribute>
   </content_rating>
+  <screenshots>
+    <screenshot type="default">
+      <image>https://shard.thomas.md/screenshots/main-view.png</image>
+      <caption>Profile overview with installed mods</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://shard.thomas.md/screenshots/store-view.png</image>
+      <caption>Mod browser showing popular Modrinth mods</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://shard.thomas.md/screenshots/settings-view.png</image>
+      <caption>Settings page with general options</caption>
+    </screenshot>
+    <screenshot>
+      <video>https://shard.thomas.md/screenshots/demo.mp4</video>
+      <caption>Interactive demo navigating through the launcher</caption>
+    </screenshot>
+  </screenshots>
   <releases>
-    <release version="0.1.1" date="2024-01-01">
+    <release version="0.1.9" date="2025-01-03">
       <description>
-        <p>Initial release</p>
+        <p>Add Flathub packaging with screenshots and demo video</p>
+      </description>
+    </release>
+    <release version="0.1.8" date="2025-01-03">
+      <description>
+        <p>Release 0.1.8</p>
       </description>
     </release>
   </releases>

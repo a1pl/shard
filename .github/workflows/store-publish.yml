@@ -437,31 +437,18 @@ jobs:
           # Copy package-lock.json for npm ci in the build
           cp ../desktop/package-lock.json .
 
-          # Create the desktop file
-          cat > md.thomas.shard.launcher.desktop << 'DESKTOP_EOF'
-          [Desktop Entry]
-          Name=Shard Launcher
-          Comment=A minimal, modern Minecraft launcher
-          Exec=shard-launcher
-          Icon=md.thomas.shard.launcher
-          Terminal=false
-          Type=Application
-          Categories=Game;Utility;
-          Keywords=minecraft;launcher;modrinth;curseforge;
-          StartupWMClass=shard-launcher
-          DESKTOP_EOF
-
           # Generate the build-from-source manifest
           # Note: cargo-sources.json and node-sources.json contain arrays of source entries
           # that flatpak-builder will process to download and extract dependencies
           cat > md.thomas.shard.launcher.yml << 'MANIFEST_EOF'
           id: md.thomas.shard.launcher
           runtime: org.freedesktop.Platform
-          runtime-version: '24.08'
+          runtime-version: '25.08'
           sdk: org.freedesktop.Sdk
           sdk-extensions:
             - org.freedesktop.Sdk.Extension.rust-stable
             - org.freedesktop.Sdk.Extension.node20
+            - org.freedesktop.Sdk.Extension.openjdk21
           command: shard-launcher
 
           finish-args:
@@ -472,6 +459,7 @@ jobs:
             - --share=network
             - --persist=.shard
             - --env=FLATPAK=1
+            - --env=PATH=/app/jre/bin:/app/bin:/usr/bin
 
           build-options:
             append-path: /usr/lib/sdk/rust-stable/bin:/usr/lib/sdk/node20/bin
@@ -480,6 +468,12 @@ jobs:
               npm_config_nodedir: /usr/lib/sdk/node20
 
           modules:
+            # Install OpenJDK 21 for running Minecraft
+            - name: openjdk
+              buildsystem: simple
+              build-commands:
+                - /usr/lib/sdk/openjdk21/install.sh
+
             - name: shard-launcher
               buildsystem: simple
               build-options:
@@ -503,12 +497,6 @@ jobs:
                     directory = "cargo-sources"
                   dest: .cargo
                   dest-filename: config.toml
-                # Desktop file
-                - type: file
-                  path: md.thomas.shard.launcher.desktop
-                # Metainfo
-                - type: file
-                  path: md.thomas.shard.launcher.metainfo.xml
                 # package-lock.json for npm ci
                 - type: file
                   path: package-lock.json
@@ -521,84 +509,25 @@ jobs:
                 - cd desktop/src-tauri && cargo build --release --offline
                 # Install binary
                 - install -Dm755 desktop/src-tauri/target/release/shard-launcher /app/bin/shard-launcher
-                # Install desktop file
-                - install -Dm644 md.thomas.shard.launcher.desktop /app/share/applications/md.thomas.shard.launcher.desktop
+                # Install desktop file from upstream
+                - install -Dm644 packaging/flathub/md.thomas.shard.launcher.desktop /app/share/applications/md.thomas.shard.launcher.desktop
                 # Install icons
                 - install -Dm644 desktop/src-tauri/icons/icon.png /app/share/icons/hicolor/256x256/apps/md.thomas.shard.launcher.png
                 - install -Dm644 desktop/src-tauri/icons/128x128.png /app/share/icons/hicolor/128x128/apps/md.thomas.shard.launcher.png
                 - install -Dm644 desktop/src-tauri/icons/32x32.png /app/share/icons/hicolor/32x32/apps/md.thomas.shard.launcher.png
-                # Install metainfo
-                - install -Dm644 md.thomas.shard.launcher.metainfo.xml /app/share/metainfo/md.thomas.shard.launcher.metainfo.xml
+                # Install metainfo from upstream
+                - install -Dm644 packaging/flathub/md.thomas.shard.launcher.metainfo.xml /app/share/metainfo/md.thomas.shard.launcher.metainfo.xml
           MANIFEST_EOF
 
           # Replace placeholders in manifest
           sed -i "s|TAG_PLACEHOLDER|${TAG}|g" md.thomas.shard.launcher.yml
           sed -i "s|COMMIT_PLACEHOLDER|${COMMIT}|g" md.thomas.shard.launcher.yml
 
-          # Generate metainfo
-          cat > md.thomas.shard.launcher.metainfo.xml << METAINFO_EOF
-          <?xml version="1.0" encoding="UTF-8"?>
-          <component type="desktop-application">
-            <id>md.thomas.shard.launcher</id>
-            <name>Shard Launcher</name>
-            <summary>A minimal, modern Minecraft launcher</summary>
-            <metadata_license>CC0-1.0</metadata_license>
-            <project_license>MIT</project_license>
-            <developer id="md.thomas">
-              <name>Thomas Marchand</name>
-            </developer>
-            <description>
-              <p>
-                Shard Launcher is a modern, minimal Minecraft launcher with a clean interface
-                focused on stability and ease of use.
-              </p>
-              <p>Features:</p>
-              <ul>
-                <li>Intuitive profile management with drag-and-drop organization</li>
-                <li>Built-in mod browser for Modrinth and CurseForge</li>
-                <li>3D skin viewer with cape support</li>
-                <li>Support for Fabric, Forge, Quilt, and NeoForge</li>
-                <li>Smart storage that automatically deduplicates mods across profiles</li>
-                <li>Multiple Microsoft account support with easy switching</li>
-              </ul>
-            </description>
-            <launchable type="desktop-id">md.thomas.shard.launcher.desktop</launchable>
-            <url type="homepage">https://shard.thomas.md</url>
-            <url type="bugtracker">https://github.com/th0rgal/shard/issues</url>
-            <url type="vcs-browser">https://github.com/th0rgal/shard</url>
-            <categories>
-              <category>Game</category>
-              <category>Utility</category>
-            </categories>
-            <keywords>
-              <keyword>minecraft</keyword>
-              <keyword>launcher</keyword>
-              <keyword>modrinth</keyword>
-              <keyword>curseforge</keyword>
-              <keyword>fabric</keyword>
-              <keyword>forge</keyword>
-            </keywords>
-            <content_rating type="oars-1.1">
-              <content_attribute id="social-chat">moderate</content_attribute>
-            </content_rating>
-            <screenshots>
-              <screenshot type="default">
-                <image>https://shard.thomas.md/screenshots/main.png</image>
-                <caption>Main launcher view with profile management</caption>
-              </screenshot>
-            </screenshots>
-            <releases>
-              <release version="${VERSION}" date="${DATE}">
-                <description>
-                  <p>Release ${VERSION}</p>
-                </description>
-              </release>
-            </releases>
-          </component>
-          METAINFO_EOF
+          # Remove separate desktop and metainfo files from flathub repo (they're now installed from upstream)
+          rm -f md.thomas.shard.launcher.desktop md.thomas.shard.launcher.metainfo.xml
 
-          git add md.thomas.shard.launcher.yml md.thomas.shard.launcher.metainfo.xml md.thomas.shard.launcher.desktop cargo-sources.json node-sources.json package-lock.json
-          git -c user.name="github-actions" -c user.email="github-actions@github.com" commit -m "Update Shard Launcher to ${VERSION} (build from source)" || echo "No changes to commit"
+          git add -A
+          git -c user.name="github-actions" -c user.email="github-actions@github.com" commit -m "Update Shard Launcher to ${VERSION}" || echo "No changes to commit"
           git push
 
   winget:
