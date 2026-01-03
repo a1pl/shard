@@ -370,7 +370,7 @@ jobs:
       - name: Install Python dependencies
         if: steps.check.outputs.skip != 'true'
         run: |
-          pip install aiohttp toml
+          pip install aiohttp toml tomlkit
 
       - name: Collect release info
         if: steps.check.outputs.skip != 'true'
