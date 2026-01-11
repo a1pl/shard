@@ -3,6 +3,7 @@
   "productName": "Shard Launcher",
   "version": "0.1.14",
   "identifier": "sh.shard.launcher",
+  
   "build": {
     "beforeDevCommand": "bun run dev",
     "devUrl": "http://localhost:1420",
@@ -69,8 +70,7 @@
   },
   "plugins": {
     "updater": {
-      "endpoints": ["https://github.com/th0rgal/shard/releases/latest/download/latest.json?v={{current_version}}"],
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDIyRkQ1QkI0MjBBRENGMEYKUldRUHo2MGd0RnY5SWhudkdUc2hMc2lpc3NmRmlORVlSUVVia3J0ZXZ5VDFUVzVNR2Y1ME41U0gK"
+      "active": false
     },
     "deep-link": {
       "desktop": {
