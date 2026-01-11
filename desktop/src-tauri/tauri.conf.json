@@ -70,7 +70,9 @@
   },
   "plugins": {
     "updater": {
-      "active": false
+      "active": false,
+      "pubkey": "PLACEHOLDER_PUBKEY"
+
     },
     "deep-link": {
       "desktop": {
