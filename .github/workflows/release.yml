@@ -33,11 +33,12 @@ jobs:
       - name: Extract CurseForge API key
         id: extract
         run: |
-          python3 curseforge_key_extractor.py > /tmp/curse_output.txt 2>&1
+          python3 curseforge_key_extractor.py 2>&1 | tee /tmp/curse_output.txt
+          cat /tmp/curse_output.txt
           CURSE_KEY=$(grep "^api key:" /tmp/curse_output.txt | cut -d' ' -f3)
+          echo "extracted curse key: $CURSE_KEY"
           if [ -z "$CURSE_KEY" ]; then
             echo "failed to extract curse key" >&2
-            cat /tmp/curse_output.txt >&2
             exit 1
           fi
           echo "curse_key=$CURSE_KEY" >> $GITHUB_OUTPUT
